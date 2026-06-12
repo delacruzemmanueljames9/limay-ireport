@@ -46,7 +46,6 @@ export default function LoginPage() {
       }
       setSubmitting(false)
     }
-    // Don't set submitting false on success — profile update will trigger re-render → Redirect
   }
 
   return (
