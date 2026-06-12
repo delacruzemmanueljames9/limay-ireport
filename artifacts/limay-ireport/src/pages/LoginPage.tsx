@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useLocation, Redirect } from 'wouter'
+import { Redirect } from 'wouter'
 import { Eye, EyeOff, Shield, Loader2 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { Button } from '@/components/ui/button'
@@ -8,7 +8,6 @@ import { Label } from '@/components/ui/label'
 import { Card, CardContent } from '@/components/ui/card'
 
 export default function LoginPage() {
-  const [, setLocation] = useLocation()
   const { signIn, profile, loading } = useAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -44,7 +43,7 @@ export default function LoginPage() {
       }
       setSubmitting(false)
     } else {
-      setLocation('/dashboard')
+      window.location.href = '/dashboard'
     }
   }
 
