@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useLocation, Redirect } from 'wouter'
 import { Eye, EyeOff, Shield, Loader2 } from 'lucide-react'
-import { useAuth } from '@/contexts/AuthContext'
+import { useAuth } from '@/context/AuthContext'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -16,8 +16,6 @@ export default function LoginPage() {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // While auth is initializing — show nothing (ProtectedRoute shows spinner for protected pages;
-  // here we just wait before deciding to show login vs redirect)
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[hsl(218,64%,22%)]">
@@ -26,7 +24,6 @@ export default function LoginPage() {
     )
   }
 
-  // Already logged in → go directly to dashboard (use Redirect, not setLocation in render)
   if (profile) {
     return <Redirect to="/dashboard" />
   }
@@ -37,7 +34,6 @@ export default function LoginPage() {
     setSubmitting(true)
     const { error: err } = await signIn(email, password)
     if (err) {
-      // Friendly message for the most common case
       const msg = err.toLowerCase()
       if (msg.includes('invalid') || msg.includes('credentials') || msg.includes('password')) {
         setError('Invalid email or password. Please try again.')
@@ -48,14 +44,12 @@ export default function LoginPage() {
       }
       setSubmitting(false)
     } else {
-      // onAuthStateChange in AuthContext will update profile → Redirect above fires
       setLocation('/dashboard')
     }
   }
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-[hsl(218,64%,22%)] px-4">
-      {/* Background dot pattern */}
       <div
         className="absolute inset-0 opacity-5 pointer-events-none"
         style={{
@@ -63,9 +57,7 @@ export default function LoginPage() {
           backgroundSize: '50px 50px',
         }}
       />
-
       <div className="relative w-full max-w-md">
-        {/* Branding */}
         <div className="flex flex-col items-center mb-8">
           <div className="h-20 w-20 rounded-full bg-[hsl(38,90%,55%)] flex items-center justify-center mb-4 shadow-lg">
             <Shield className="h-10 w-10 text-white" />
@@ -84,7 +76,6 @@ export default function LoginPage() {
               <h2 className="text-lg font-semibold text-foreground">Sign In</h2>
               <p className="text-sm text-muted-foreground">Enter your credentials to access the system</p>
             </div>
-
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="email">Email Address</Label>
@@ -97,10 +88,8 @@ export default function LoginPage() {
                   required
                   autoComplete="email"
                   autoFocus
-                  data-testid="input-email"
                 />
               </div>
-
               <div className="space-y-2">
                 <Label htmlFor="password">Password</Label>
                 <div className="relative">
@@ -112,37 +101,24 @@ export default function LoginPage() {
                     onChange={e => setPassword(e.target.value)}
                     required
                     autoComplete="current-password"
-                    data-testid="input-password"
                     className="pr-10"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(v => !v)}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                    data-testid="button-toggle-password"
                     tabIndex={-1}
                   >
                     {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
                 </div>
               </div>
-
               {error && (
-                <div
-                  className="text-sm text-destructive bg-destructive/10 border border-destructive/20 rounded-md px-3 py-2"
-                  role="alert"
-                  data-testid="text-error"
-                >
+                <div className="text-sm text-destructive bg-destructive/10 border border-destructive/20 rounded-md px-3 py-2" role="alert">
                   {error}
                 </div>
               )}
-
-              <Button
-                type="submit"
-                className="w-full"
-                disabled={submitting}
-                data-testid="button-submit"
-              >
+              <Button type="submit" className="w-full" disabled={submitting}>
                 {submitting ? (
                   <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Signing in...</>
                 ) : 'Sign In'}
