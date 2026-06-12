@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useLocation, Redirect } from 'wouter'
 import { Eye, EyeOff, Shield, Loader2 } from 'lucide-react'
-import { useAuth } from '@/context/AuthContext'
+import { useAuth } from '@/contexts/AuthContext'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
