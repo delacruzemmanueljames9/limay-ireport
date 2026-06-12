@@ -17,10 +17,7 @@ async function fetchProfile(userId: string): Promise<Profile | null> {
     .select('*, office:offices(*)')
     .eq('id', userId)
     .single()
-  if (error) {
-    console.error('fetchProfile error:', error)
-    return null
-  }
+  if (error) return null
   return data as Profile
 }
 
@@ -29,6 +26,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (session?.user) {
+        const p = await fetchProfile(session.user.id)
+        setProfile(p)
+      }
+      setLoading(false)
+    })
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (_event, session) => {
         if (session?.user) {
@@ -44,8 +49,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   async function signIn(email: string, password: string) {
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) return { error: error.message }
+    if (data.session) {
+      await supabase.auth.setSession(data.session)
+      const p = await fetchProfile(data.user.id)
+      setProfile(p)
+    }
     return { error: null }
   }
 
