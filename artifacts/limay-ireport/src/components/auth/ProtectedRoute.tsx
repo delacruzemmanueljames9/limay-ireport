@@ -1,7 +1,7 @@
 import { ReactNode } from 'react'
 import { Redirect } from 'wouter'
 import { Shield } from 'lucide-react'
-import { useAuth } from '@/context/AuthContext'
+import { useAuth } from '@/contexts/AuthContext'
 import { Button } from '@/components/ui/button'
 import { useLocation } from 'wouter'
 
