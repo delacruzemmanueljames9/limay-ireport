@@ -43,7 +43,7 @@ export default function LoginPage() {
       }
       setSubmitting(false)
     } else {
-      window.location.href = '/dashboard'
+      setSubmitting(false)
     }
   }
 
