@@ -26,6 +26,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    // Check existing session on mount
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (session?.user) {
         const p = await fetchProfile(session.user.id)
@@ -34,13 +35,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(false)
     })
 
+    // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
+      async (event, session) => {
+        if (event === 'SIGNED_OUT') {
+          setProfile(null)
+          setLoading(false)
+          return
+        }
         if (session?.user) {
           const p = await fetchProfile(session.user.id)
           setProfile(p)
-        } else {
-          setProfile(null)
         }
         setLoading(false)
       }
@@ -51,8 +56,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   async function signIn(email: string, password: string) {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) return { error: error.message }
-    if (data.session) {
-      await supabase.auth.setSession(data.session)
+    if (data.user) {
       const p = await fetchProfile(data.user.id)
       setProfile(p)
     }
@@ -61,8 +65,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function signOut() {
     await supabase.auth.signOut()
-    setProfile(null)
-    window.location.href = '/login'
   }
 
   return (
