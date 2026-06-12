@@ -14,7 +14,7 @@ const AuthContext = createContext<AuthContextType | null>(null)
 async function fetchProfile(userId: string): Promise<Profile | null> {
   const { data, error } = await supabase
     .from('profiles')
-    .select('*, office:offices(*)')
+    .select('id, full_name, role, office_id')
     .eq('id', userId)
     .single()
   if (error) return null
@@ -26,7 +26,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    // Check existing session on mount
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (session?.user) {
         const p = await fetchProfile(session.user.id)
@@ -35,7 +34,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(false)
     })
 
-    // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         if (event === 'SIGNED_OUT') {
