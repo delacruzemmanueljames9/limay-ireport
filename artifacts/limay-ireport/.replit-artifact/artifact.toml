@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "LIMAY iREPORT SYSTEM"
+version = "1.0.0"
+id = "artifacts/limay-ireport"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 23772
+
+[services.development]
+run = "pnpm --filter @workspace/limay-ireport run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/limay-ireport", "run", "build" ]
+publicDir = "artifacts/limay-ireport/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "23772"
+BASE_PATH = "/"
