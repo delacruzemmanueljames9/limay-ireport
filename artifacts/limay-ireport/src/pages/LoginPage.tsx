@@ -42,9 +42,9 @@ export default function LoginPage() {
       } else if (msg.includes('email not confirmed')) {
         setError('Please verify your email address before signing in.')
       } else {
-        setError(err)
-      }
-      setSubmitting(false)
+  // session is set — let AuthContext redirect via profile check
+  setSubmitting(false)
+}
     } else {
       window.location.replace('/dashboard')
     }
