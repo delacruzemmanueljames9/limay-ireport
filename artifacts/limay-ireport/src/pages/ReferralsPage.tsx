@@ -74,15 +74,21 @@ function ReferralRow({ referral, showActions, onUpdate }: { referral: Referral; 
 
 export default function ReferralsPage() {
   const { profile } = useAuth()
-  const { sent, received, loading, updateStatus } = useReferrals(profile?.office_id)
+  const { sent, received, loading, pulse, updateStatus } = useReferrals(profile?.office_id)
   const canWrite = profile?.role !== 'viewer'
 
   return (
     <Layout>
       <div className="space-y-4">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Referrals</h1>
-          <p className="text-sm text-muted-foreground">Inter-agency case referrals for {profile?.office?.name ?? 'your office'}</p>
+        <div className="flex items-start justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-foreground">Referrals</h1>
+            <p className="text-sm text-muted-foreground">Inter-agency case referrals for {profile?.office?.name ?? 'your office'}</p>
+          </div>
+          <div className="flex items-center gap-1.5 text-xs text-emerald-600 font-medium mt-1" data-testid="referrals-live-indicator">
+            <span className={`h-1.5 w-1.5 rounded-full bg-emerald-500 ${pulse ? 'animate-ping' : 'animate-pulse'}`} />
+            LIVE
+          </div>
         </div>
 
         <Tabs defaultValue="inbox">

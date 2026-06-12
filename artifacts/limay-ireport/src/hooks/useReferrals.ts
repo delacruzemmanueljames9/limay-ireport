@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import type { Referral } from '@/types'
 
@@ -6,8 +6,9 @@ export function useReferrals(officeId?: string) {
   const [sent, setSent] = useState<Referral[]>([])
   const [received, setReceived] = useState<Referral[]>([])
   const [loading, setLoading] = useState(true)
+  const [pulse, setPulse] = useState(false)
 
-  async function load() {
+  const load = useCallback(async () => {
     if (!officeId) { setLoading(false); return }
     setLoading(true)
     const [sentRes, receivedRes] = await Promise.all([
@@ -25,9 +26,23 @@ export function useReferrals(officeId?: string) {
     setSent((sentRes.data ?? []) as Referral[])
     setReceived((receivedRes.data ?? []) as Referral[])
     setLoading(false)
-  }
+  }, [officeId])
 
-  useEffect(() => { load() }, [officeId])
+  useEffect(() => {
+    load()
+
+    if (!officeId) return
+    const channel = supabase
+      .channel(`referrals-realtime-${officeId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'referrals' }, () => {
+        setPulse(true)
+        load()
+        setTimeout(() => setPulse(false), 1200)
+      })
+      .subscribe()
+
+    return () => { supabase.removeChannel(channel) }
+  }, [officeId, load])
 
   async function updateStatus(referralId: string, status: string) {
     const updateData: Record<string, string> = { status }
@@ -37,5 +52,5 @@ export function useReferrals(officeId?: string) {
     return { error: error?.message ?? null }
   }
 
-  return { sent, received, loading, reload: load, updateStatus }
+  return { sent, received, loading, pulse, reload: load, updateStatus }
 }

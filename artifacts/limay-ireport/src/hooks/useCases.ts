@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import type { Case, Victim, Respondent, CaseNarrative, CaseAttachment, CaseStatusLog } from '@/types'
 
@@ -57,7 +57,7 @@ export function useCase(id: string | null) {
   const [statusLogs, setStatusLogs] = useState<CaseStatusLog[]>([])
   const [loading, setLoading] = useState(true)
 
-  async function loadCase() {
+  const loadCase = useCallback(async () => {
     if (!id) return
     setLoading(true)
     const [caseRes, victimsRes, respondentsRes, narrativesRes, attachmentsRes, logsRes] = await Promise.all([
@@ -75,11 +75,22 @@ export function useCase(id: string | null) {
     setAttachments((attachmentsRes.data ?? []) as CaseAttachment[])
     setStatusLogs((logsRes.data ?? []) as CaseStatusLog[])
     setLoading(false)
-  }
+  }, [id])
 
   useEffect(() => {
     loadCase()
-  }, [id])
+
+    if (!id) return
+    const channel = supabase
+      .channel(`case-detail-realtime-${id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'cases', filter: `id=eq.${id}` }, () => loadCase())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'case_status_logs', filter: `case_id=eq.${id}` }, () => loadCase())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'case_narratives', filter: `case_id=eq.${id}` }, () => loadCase())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'case_attachments', filter: `case_id=eq.${id}` }, () => loadCase())
+      .subscribe()
+
+    return () => { supabase.removeChannel(channel) }
+  }, [id, loadCase])
 
   return { caseData, victims, respondents, narratives, attachments, statusLogs, loading, reload: loadCase }
 }

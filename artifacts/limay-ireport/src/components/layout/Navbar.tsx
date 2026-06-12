@@ -51,9 +51,13 @@ export function Navbar() {
         </SheetContent>
       </Sheet>
 
-      {/* Page title */}
-      <div className="flex items-center gap-1.5 flex-1">
+      {/* Page title + global live badge */}
+      <div className="flex items-center gap-2 flex-1">
         <span className="text-sm font-semibold text-foreground">{pageTitle}</span>
+        <span className="hidden sm:flex items-center gap-1 text-[10px] font-semibold text-emerald-600 bg-emerald-50 border border-emerald-200 rounded-full px-2 py-0.5 leading-none" data-testid="navbar-live-badge">
+          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+          LIVE
+        </span>
       </div>
 
       {/* Office & user info */}

@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useLocation, Link } from 'wouter'
-import { Plus, Search, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Plus, ChevronLeft, ChevronRight } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { Layout } from '@/components/layout/Layout'
@@ -44,44 +44,55 @@ export default function CasesPage() {
   const [filterType, setFilterType] = useState<string>('all')
   const [filterStatus, setFilterStatus] = useState<string>('all')
   const [filterPriority, setFilterPriority] = useState<string>('all')
+  const [pulse, setPulse] = useState(false)
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    let query = supabase
+      .from('cases')
+      .select('*, filed_by_office:offices!cases_filed_by_office_id_fkey(name)', { count: 'exact' })
+      .order('created_at', { ascending: false })
+
+    if (filterType !== 'all') query = query.eq('case_type', filterType)
+    if (filterStatus !== 'all') query = query.eq('status', filterStatus)
+    if (filterPriority !== 'all') query = query.eq('priority_level', filterPriority)
+
+    const from = (page - 1) * PAGE_SIZE
+    query = query.range(from, from + PAGE_SIZE - 1)
+
+    const { data, error, count } = await query
+    if (!error && data) {
+      const caseList = data as Case[]
+      const caseIds = caseList.map(c => c.id)
+      const { data: victims } = caseIds.length
+        ? await supabase.from('victims').select('case_id, last_name, first_name').in('case_id', caseIds)
+        : { data: [] }
+
+      const victimMap: Record<string, string> = {}
+      ;(victims ?? []).forEach((v: Pick<Victim, 'case_id' | 'last_name' | 'first_name'>) => {
+        if (!victimMap[v.case_id]) victimMap[v.case_id] = `${v.last_name}, ${v.first_name}`
+      })
+
+      setCases(caseList.map(c => ({ ...c, victim_name: victimMap[c.id] })))
+      setTotal(count ?? 0)
+    }
+    setLoading(false)
+  }, [filterType, filterStatus, filterPriority, page])
 
   useEffect(() => {
-    async function load() {
-      setLoading(true)
-      let query = supabase
-        .from('cases')
-        .select('*, filed_by_office:offices!cases_filed_by_office_id_fkey(name)', { count: 'exact' })
-        .order('created_at', { ascending: false })
-
-      if (filterType !== 'all') query = query.eq('case_type', filterType)
-      if (filterStatus !== 'all') query = query.eq('status', filterStatus)
-      if (filterPriority !== 'all') query = query.eq('priority_level', filterPriority)
-
-      const from = (page - 1) * PAGE_SIZE
-      query = query.range(from, from + PAGE_SIZE - 1)
-
-      const { data, error, count } = await query
-      if (!error && data) {
-        const caseList = data as Case[]
-        // Fetch first victim for each case
-        const caseIds = caseList.map(c => c.id)
-        const { data: victims } = await supabase
-          .from('victims')
-          .select('case_id, last_name, first_name')
-          .in('case_id', caseIds)
-
-        const victimMap: Record<string, string> = {}
-        ;(victims ?? []).forEach((v: Pick<Victim, 'case_id' | 'last_name' | 'first_name'>) => {
-          if (!victimMap[v.case_id]) victimMap[v.case_id] = `${v.last_name}, ${v.first_name}`
-        })
-
-        setCases(caseList.map(c => ({ ...c, victim_name: victimMap[c.id] })))
-        setTotal(count ?? 0)
-      }
-      setLoading(false)
-    }
     load()
-  }, [filterType, filterStatus, filterPriority, page])
+
+    const channel = supabase
+      .channel('cases-list-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'cases' }, () => {
+        setPulse(true)
+        load()
+        setTimeout(() => setPulse(false), 1200)
+      })
+      .subscribe()
+
+    return () => { supabase.removeChannel(channel) }
+  }, [load])
 
   const totalPages = Math.ceil(total / PAGE_SIZE)
   const canWrite = profile?.role !== 'viewer'
@@ -92,7 +103,13 @@ export default function CasesPage() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-foreground">Cases / Kaso</h1>
-            <p className="text-sm text-muted-foreground">{total} case{total !== 1 ? 's' : ''} found</p>
+            <div className="flex items-center gap-3">
+              <p className="text-sm text-muted-foreground">{total} case{total !== 1 ? 's' : ''} found</p>
+              <div className="flex items-center gap-1 text-xs text-emerald-600 font-medium" data-testid="cases-live-indicator">
+                <span className={`h-1.5 w-1.5 rounded-full bg-emerald-500 ${pulse ? 'animate-ping' : 'animate-pulse'}`} />
+                LIVE
+              </div>
+            </div>
           </div>
           {canWrite && (
             <Button asChild data-testid="button-new-case">

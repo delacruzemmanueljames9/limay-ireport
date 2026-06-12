@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useLocation } from 'wouter'
 import { FolderOpen, Clock, CheckCircle, ArrowLeftRight, AlertTriangle, TrendingUp } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
@@ -31,54 +31,77 @@ export default function DashboardPage() {
   const [typeData, setTypeData] = useState<{ name: string; value: number }[]>([])
   const [recentLogs, setRecentLogs] = useState<{ id: string; new_status: string; created_at: string; case_id: string }[]>([])
   const [loading, setLoading] = useState(true)
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
+  const [pulse, setPulse] = useState(false)
+
+  const load = useCallback(async () => {
+    const [casesRes, referralsRes, logsRes] = await Promise.all([
+      supabase.from('cases').select('id, status, case_type, created_at'),
+      supabase.from('referrals').select('id, status').eq('status', 'sent'),
+      supabase.from('case_status_logs').select('id, new_status, created_at, case_id').order('created_at', { ascending: false }).limit(10),
+    ])
+
+    const cases = (casesRes.data ?? []) as { id: string; status: CaseStatus; case_type: CaseType; created_at: string }[]
+    setStats({
+      total: cases.length,
+      open: cases.filter(c => c.status === 'open').length,
+      ongoing: cases.filter(c => c.status === 'ongoing').length,
+      resolved: cases.filter(c => c.status === 'resolved').length,
+      pending_referrals: (referralsRes.data ?? []).length,
+    })
+
+    const now = new Date()
+    const monthly: Record<string, number> = {}
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
+      const key = d.toLocaleString('en-PH', { month: 'short' })
+      monthly[key] = 0
+    }
+    cases.forEach(c => {
+      const d = new Date(c.created_at)
+      const key = d.toLocaleString('en-PH', { month: 'short' })
+      if (key in monthly) monthly[key]++
+    })
+    setMonthlyData(Object.entries(monthly).map(([month, cases]) => ({ month, cases })))
+
+    const typeCounts: Record<string, number> = {}
+    cases.forEach(c => {
+      typeCounts[c.case_type] = (typeCounts[c.case_type] ?? 0) + 1
+    })
+    setTypeData(Object.entries(typeCounts).map(([key, value]) => ({
+      name: CASE_TYPE_LABELS[key as CaseType] ?? key,
+      value,
+    })))
+
+    setRecentLogs((logsRes.data ?? []) as typeof recentLogs)
+    setLoading(false)
+    setLastUpdated(new Date())
+  }, [])
 
   useEffect(() => {
-    async function load() {
-      const [casesRes, referralsRes, logsRes] = await Promise.all([
-        supabase.from('cases').select('id, status, case_type, created_at'),
-        supabase.from('referrals').select('id, status').eq('status', 'sent'),
-        supabase.from('case_status_logs').select('id, new_status, created_at, case_id').order('created_at', { ascending: false }).limit(10),
-      ])
-
-      const cases = (casesRes.data ?? []) as { id: string; status: CaseStatus; case_type: CaseType; created_at: string }[]
-      setStats({
-        total: cases.length,
-        open: cases.filter(c => c.status === 'open').length,
-        ongoing: cases.filter(c => c.status === 'ongoing').length,
-        resolved: cases.filter(c => c.status === 'resolved').length,
-        pending_referrals: (referralsRes.data ?? []).length,
-      })
-
-      // Monthly data (last 6 months)
-      const now = new Date()
-      const monthly: Record<string, number> = {}
-      for (let i = 5; i >= 0; i--) {
-        const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
-        const key = d.toLocaleString('en-PH', { month: 'short' })
-        monthly[key] = 0
-      }
-      cases.forEach(c => {
-        const d = new Date(c.created_at)
-        const key = d.toLocaleString('en-PH', { month: 'short' })
-        if (key in monthly) monthly[key]++
-      })
-      setMonthlyData(Object.entries(monthly).map(([month, cases]) => ({ month, cases })))
-
-      // Type breakdown
-      const typeCounts: Record<string, number> = {}
-      cases.forEach(c => {
-        typeCounts[c.case_type] = (typeCounts[c.case_type] ?? 0) + 1
-      })
-      setTypeData(Object.entries(typeCounts).map(([key, value]) => ({
-        name: CASE_TYPE_LABELS[key as CaseType] ?? key,
-        value,
-      })))
-
-      setRecentLogs((logsRes.data ?? []) as typeof recentLogs)
-      setLoading(false)
-    }
     load()
-  }, [])
+
+    const channel = supabase
+      .channel('dashboard-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'cases' }, () => {
+        setPulse(true)
+        load()
+        setTimeout(() => setPulse(false), 1200)
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'referrals' }, () => {
+        setPulse(true)
+        load()
+        setTimeout(() => setPulse(false), 1200)
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'case_status_logs' }, () => {
+        setPulse(true)
+        load()
+        setTimeout(() => setPulse(false), 1200)
+      })
+      .subscribe()
+
+    return () => { supabase.removeChannel(channel) }
+  }, [load])
 
   const statCards = [
     { label: 'Total Cases', value: stats.total, icon: FolderOpen, color: 'text-primary', bg: 'bg-primary/10' },
@@ -90,11 +113,22 @@ export default function DashboardPage() {
   return (
     <Layout>
       <div className="space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
-          <p className="text-muted-foreground text-sm">
-            {profile?.office?.name ?? 'All offices'} &mdash; Overview
-          </p>
+        <div className="flex items-start justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
+            <p className="text-muted-foreground text-sm">
+              {profile?.office?.name ?? 'All offices'} &mdash; Overview
+            </p>
+          </div>
+          <div className="flex items-center gap-1.5 text-xs text-emerald-600 font-medium" data-testid="live-indicator">
+            <span className={`h-2 w-2 rounded-full bg-emerald-500 ${pulse ? 'animate-ping' : 'animate-pulse'}`} />
+            LIVE
+            {lastUpdated && (
+              <span className="text-muted-foreground font-normal ml-1">
+                · {lastUpdated.toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+              </span>
+            )}
+          </div>
         </div>
 
         {/* Stat cards */}
