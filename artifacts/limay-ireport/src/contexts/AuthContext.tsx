@@ -26,8 +26,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    // onAuthStateChange fires INITIAL_SESSION immediately with current session,
-    // so we don't need a separate getSession() call — avoids race conditions.
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (_event, session) => {
         if (session?.user) {
@@ -43,14 +41,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   async function signIn(email: string, password: string) {
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) return { error: error.message }
+    if (data.user) {
+      const p = await fetchProfile(data.user.id)
+      setProfile(p)
+    }
     return { error: null }
   }
 
   async function signOut() {
     await supabase.auth.signOut()
-    // profile is cleared by onAuthStateChange above
+    setProfile(null)
   }
 
   return (
