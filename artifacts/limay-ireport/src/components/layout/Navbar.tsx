@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useLocation } from 'wouter'
-import { Bell, LogOut, Menu, X, ChevronRight } from 'lucide-react'
+import { Bell, LogOut, Menu } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useNotifications } from '@/hooks/useNotifications'
 import { Button } from '@/components/ui/button'
@@ -12,18 +12,24 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { Badge } from '@/components/ui/badge'
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet'
 import { Sidebar } from './Sidebar'
 import { cn } from '@/lib/utils'
 
 const PAGE_TITLES: Record<string, string> = {
+  '/dashboard': 'Dashboard',
   '/': 'Dashboard',
   '/cases': 'Cases / Kaso',
   '/cases/new': 'New Case',
   '/referrals': 'Referrals',
   '/reports': 'Reports',
   '/admin': 'Admin Panel',
+}
+
+function getTitle(location: string): string {
+  if (PAGE_TITLES[location]) return PAGE_TITLES[location]
+  if (location.startsWith('/cases/')) return 'Case Detail'
+  return 'LIMAY iREPORT'
 }
 
 export function Navbar() {
@@ -35,10 +41,15 @@ export function Navbar() {
   )
   const [mobileOpen, setMobileOpen] = useState(false)
 
-  const pageTitle = PAGE_TITLES[location] ?? 'LIMAY iREPORT'
+  const pageTitle = getTitle(location)
+
+  async function handleSignOut() {
+    await signOut()
+    setLocation('/login')
+  }
 
   return (
-    <header className="h-14 border-b border-border bg-card flex items-center px-4 gap-3 no-print">
+    <header className="h-14 border-b border-border bg-card flex items-center px-4 gap-3 no-print flex-shrink-0">
       {/* Mobile menu */}
       <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
         <SheetTrigger asChild>
@@ -51,25 +62,30 @@ export function Navbar() {
         </SheetContent>
       </Sheet>
 
-      {/* Page title + global live badge */}
-      <div className="flex items-center gap-2 flex-1">
-        <span className="text-sm font-semibold text-foreground">{pageTitle}</span>
-        <span className="hidden sm:flex items-center gap-1 text-[10px] font-semibold text-emerald-600 bg-emerald-50 border border-emerald-200 rounded-full px-2 py-0.5 leading-none" data-testid="navbar-live-badge">
+      {/* Page title + global LIVE badge */}
+      <div className="flex items-center gap-2 flex-1 min-w-0">
+        <span className="text-sm font-semibold text-foreground truncate">{pageTitle}</span>
+        <span
+          className="hidden sm:flex items-center gap-1 text-[10px] font-semibold text-emerald-600 bg-emerald-50 border border-emerald-200 rounded-full px-2 py-0.5 leading-none flex-shrink-0"
+          data-testid="navbar-live-badge"
+        >
           <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
           LIVE
         </span>
       </div>
 
       {/* Office & user info */}
-      <div className="hidden md:flex flex-col items-end">
-        <p className="text-xs font-medium text-foreground">{profile?.full_name}</p>
-        <p className="text-xs text-muted-foreground truncate max-w-[200px]">{profile?.office?.name ?? 'No office assigned'}</p>
+      <div className="hidden md:flex flex-col items-end flex-shrink-0">
+        <p className="text-xs font-medium text-foreground truncate max-w-[200px]">{profile?.full_name}</p>
+        <p className="text-xs text-muted-foreground truncate max-w-[200px]">
+          {profile?.office?.name ?? 'No office assigned'}
+        </p>
       </div>
 
       {/* Notification bell */}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="icon" className="relative" data-testid="button-notifications">
+          <Button variant="ghost" size="icon" className="relative flex-shrink-0" data-testid="button-notifications">
             <Bell className="h-5 w-5" />
             {unreadCount > 0 && (
               <span className="absolute -top-0.5 -right-0.5 h-4 w-4 rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold flex items-center justify-center">
@@ -109,7 +125,14 @@ export function Navbar() {
       </DropdownMenu>
 
       {/* Logout */}
-      <Button variant="ghost" size="icon" onClick={signOut} data-testid="button-logout" title="Sign out">
+      <Button
+        variant="ghost"
+        size="icon"
+        onClick={handleSignOut}
+        data-testid="button-logout"
+        title="Sign out"
+        className="flex-shrink-0"
+      >
         <LogOut className="h-5 w-5" />
       </Button>
     </header>

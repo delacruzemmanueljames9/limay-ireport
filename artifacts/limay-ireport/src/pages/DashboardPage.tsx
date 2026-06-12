@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useLocation } from 'wouter'
-import { FolderOpen, Clock, CheckCircle, ArrowLeftRight, AlertTriangle, TrendingUp } from 'lucide-react'
+import { FolderOpen, Clock, CheckCircle, ArrowLeftRight, AlertTriangle, TrendingUp, Settings } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { Layout } from '@/components/layout/Layout'
@@ -130,6 +130,29 @@ export default function DashboardPage() {
             )}
           </div>
         </div>
+
+        {/* Super Admin quick-access banner */}
+        {profile?.role === 'super_admin' && (
+          <div
+            className="flex items-center justify-between bg-primary/5 border border-primary/20 rounded-lg px-4 py-3 cursor-pointer hover:bg-primary/10 transition-colors"
+            onClick={() => setLocation('/admin')}
+            data-testid="admin-panel-banner"
+            role="button"
+          >
+            <div className="flex items-center gap-3">
+              <div className="h-8 w-8 rounded-md bg-primary/10 flex items-center justify-center">
+                <Settings className="h-4 w-4 text-primary" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-primary">Admin Panel</p>
+                <p className="text-xs text-muted-foreground">Manage users, offices, and system settings</p>
+              </div>
+            </div>
+            <span className="text-xs font-medium text-primary border border-primary/30 rounded px-2 py-1 flex-shrink-0">
+              Open →
+            </span>
+          </div>
+        )}
 
         {/* Stat cards */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">

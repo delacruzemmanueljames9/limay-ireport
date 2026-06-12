@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useLocation } from 'wouter'
+import { useLocation, Redirect } from 'wouter'
 import { Eye, EyeOff, Shield, Loader2 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { Button } from '@/components/ui/button'
@@ -9,40 +9,63 @@ import { Card, CardContent } from '@/components/ui/card'
 
 export default function LoginPage() {
   const [, setLocation] = useLocation()
-  const { signIn, profile } = useAuth()
+  const { signIn, profile, loading } = useAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
-  const [loading, setLoading] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // While auth is initializing — show nothing (ProtectedRoute shows spinner for protected pages;
+  // here we just wait before deciding to show login vs redirect)
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[hsl(218,64%,22%)]">
+        <div className="h-8 w-8 rounded-full border-4 border-white/30 border-t-white animate-spin" />
+      </div>
+    )
+  }
+
+  // Already logged in → go directly to dashboard (use Redirect, not setLocation in render)
   if (profile) {
-    setLocation('/')
-    return null
+    return <Redirect to="/dashboard" />
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError(null)
-    setLoading(true)
+    setSubmitting(true)
     const { error: err } = await signIn(email, password)
     if (err) {
-      setError(err.includes('Invalid') ? 'Invalid email or password. Please try again.' : err)
-      setLoading(false)
+      // Friendly message for the most common case
+      const msg = err.toLowerCase()
+      if (msg.includes('invalid') || msg.includes('credentials') || msg.includes('password')) {
+        setError('Invalid email or password. Please try again.')
+      } else if (msg.includes('email not confirmed')) {
+        setError('Please verify your email address before signing in.')
+      } else {
+        setError(err)
+      }
+      setSubmitting(false)
     } else {
-      setLocation('/')
+      // onAuthStateChange in AuthContext will update profile → Redirect above fires
+      setLocation('/dashboard')
     }
   }
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-[hsl(218,64%,22%)] px-4">
-      {/* Background pattern */}
-      <div className="absolute inset-0 opacity-5 pointer-events-none"
-        style={{ backgroundImage: 'radial-gradient(circle at 25px 25px, white 2px, transparent 0)', backgroundSize: '50px 50px' }}
+      {/* Background dot pattern */}
+      <div
+        className="absolute inset-0 opacity-5 pointer-events-none"
+        style={{
+          backgroundImage: 'radial-gradient(circle at 25px 25px, white 2px, transparent 0)',
+          backgroundSize: '50px 50px',
+        }}
       />
 
       <div className="relative w-full max-w-md">
-        {/* Logo / Badge */}
+        {/* Branding */}
         <div className="flex flex-col items-center mb-8">
           <div className="h-20 w-20 rounded-full bg-[hsl(38,90%,55%)] flex items-center justify-center mb-4 shadow-lg">
             <Shield className="h-10 w-10 text-white" />
@@ -73,6 +96,7 @@ export default function LoginPage() {
                   onChange={e => setEmail(e.target.value)}
                   required
                   autoComplete="email"
+                  autoFocus
                   data-testid="input-email"
                 />
               </div>
@@ -96,6 +120,7 @@ export default function LoginPage() {
                     onClick={() => setShowPassword(v => !v)}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                     data-testid="button-toggle-password"
+                    tabIndex={-1}
                   >
                     {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
@@ -103,7 +128,11 @@ export default function LoginPage() {
               </div>
 
               {error && (
-                <div className="text-sm text-destructive bg-destructive/10 border border-destructive/20 rounded-md px-3 py-2" data-testid="text-error">
+                <div
+                  className="text-sm text-destructive bg-destructive/10 border border-destructive/20 rounded-md px-3 py-2"
+                  role="alert"
+                  data-testid="text-error"
+                >
                   {error}
                 </div>
               )}
@@ -111,10 +140,10 @@ export default function LoginPage() {
               <Button
                 type="submit"
                 className="w-full"
-                disabled={loading}
+                disabled={submitting}
                 data-testid="button-submit"
               >
-                {loading ? (
+                {submitting ? (
                   <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Signing in...</>
                 ) : 'Sign In'}
               </Button>

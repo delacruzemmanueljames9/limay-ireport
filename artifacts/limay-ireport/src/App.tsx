@@ -1,4 +1,4 @@
-import { Switch, Route, Router as WouterRouter } from 'wouter'
+import { Switch, Route, Redirect, Router as WouterRouter } from 'wouter'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Toaster } from '@/components/ui/toaster'
 import { TooltipProvider } from '@/components/ui/tooltip'
@@ -19,19 +19,29 @@ const queryClient = new QueryClient()
 function Router() {
   return (
     <Switch>
+      {/* Public — redirect to dashboard if already logged in */}
       <Route path="/login" component={LoginPage} />
+
+      {/* Root → redirect to /dashboard */}
       <Route path="/">
+        <Redirect to="/dashboard" />
+      </Route>
+
+      {/* Dashboard — all authenticated users */}
+      <Route path="/dashboard">
         <ProtectedRoute>
           <DashboardPage />
         </ProtectedRoute>
       </Route>
+
+      {/* Cases — encoder + super_admin can create; all can view */}
       <Route path="/cases/new">
         <ProtectedRoute requiredRole="encoder">
           <NewCasePage />
         </ProtectedRoute>
       </Route>
       <Route path="/cases/:id">
-        {(params) => (
+        {() => (
           <ProtectedRoute>
             <CaseDetailPage />
           </ProtectedRoute>
@@ -42,21 +52,28 @@ function Router() {
           <CasesPage />
         </ProtectedRoute>
       </Route>
+
+      {/* Referrals — encoder + super_admin */}
       <Route path="/referrals">
-        <ProtectedRoute>
+        <ProtectedRoute requiredRole="encoder">
           <ReferralsPage />
         </ProtectedRoute>
       </Route>
+
+      {/* Reports — all authenticated users */}
       <Route path="/reports">
         <ProtectedRoute>
           <ReportsPage />
         </ProtectedRoute>
       </Route>
+
+      {/* Admin — super_admin ONLY */}
       <Route path="/admin">
         <ProtectedRoute requiredRole="super_admin">
           <AdminPage />
         </ProtectedRoute>
       </Route>
+
       <Route component={NotFound} />
     </Switch>
   )

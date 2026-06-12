@@ -11,42 +11,34 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | null>(null)
 
+async function fetchProfile(userId: string): Promise<Profile | null> {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('*, office:offices(*)')
+    .eq('id', userId)
+    .single()
+  if (error) return null
+  return data as Profile
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null)
   const [loading, setLoading] = useState(true)
 
-  async function fetchProfile(userId: string) {
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('*, office:offices(*)')
-      .eq('id', userId)
-      .single()
-    if (error) {
-      console.error('Error fetching profile:', error)
-      return null
-    }
-    return data as Profile
-  }
-
   useEffect(() => {
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      if (session?.user) {
-        const p = await fetchProfile(session.user.id)
-        setProfile(p)
+    // onAuthStateChange fires INITIAL_SESSION immediately with current session,
+    // so we don't need a separate getSession() call — avoids race conditions.
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (_event, session) => {
+        if (session?.user) {
+          const p = await fetchProfile(session.user.id)
+          setProfile(p)
+        } else {
+          setProfile(null)
+        }
+        setLoading(false)
       }
-      setLoading(false)
-    })
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      if (session?.user) {
-        const p = await fetchProfile(session.user.id)
-        setProfile(p)
-      } else {
-        setProfile(null)
-      }
-      setLoading(false)
-    })
-
+    )
     return () => subscription.unsubscribe()
   }, [])
 
@@ -58,7 +50,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function signOut() {
     await supabase.auth.signOut()
-    setProfile(null)
+    // profile is cleared by onAuthStateChange above
   }
 
   return (
