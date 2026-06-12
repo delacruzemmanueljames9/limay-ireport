@@ -27,8 +27,11 @@ export default function LoginPage() {
     return <Redirect to="/dashboard" />
   }
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
+  async function handleLogin() {
+    if (!email || !password) {
+      setError('Please enter your email and password.')
+      return
+    }
     setError(null)
     setSubmitting(true)
     const { error: err } = await signIn(email, password)
@@ -43,7 +46,7 @@ export default function LoginPage() {
       }
       setSubmitting(false)
     } else {
-      setSubmitting(false)
+      window.location.replace('/dashboard')
     }
   }
 
@@ -75,7 +78,7 @@ export default function LoginPage() {
               <h2 className="text-lg font-semibold text-foreground">Sign In</h2>
               <p className="text-sm text-muted-foreground">Enter your credentials to access the system</p>
             </div>
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="email">Email Address</Label>
                 <Input
@@ -84,7 +87,7 @@ export default function LoginPage() {
                   placeholder="you@limay.gov.ph"
                   value={email}
                   onChange={e => setEmail(e.target.value)}
-                  required
+                  onKeyDown={e => e.key === 'Enter' && handleLogin()}
                   autoComplete="email"
                   autoFocus
                 />
@@ -98,7 +101,7 @@ export default function LoginPage() {
                     placeholder="••••••••"
                     value={password}
                     onChange={e => setPassword(e.target.value)}
-                    required
+                    onKeyDown={e => e.key === 'Enter' && handleLogin()}
                     autoComplete="current-password"
                     className="pr-10"
                   />
@@ -117,12 +120,17 @@ export default function LoginPage() {
                   {error}
                 </div>
               )}
-              <Button type="submit" className="w-full" disabled={submitting}>
+              <Button
+                type="button"
+                className="w-full"
+                disabled={submitting}
+                onClick={handleLogin}
+              >
                 {submitting ? (
                   <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Signing in...</>
                 ) : 'Sign In'}
               </Button>
-            </form>
+            </div>
           </CardContent>
         </Card>
 
