@@ -1,0 +1,929 @@
+# 🏛️ FULL BUILD PROMPT — LIMAY iREPORT SYSTEM
+## React + Vite + TypeScript + Supabase + Vercel (100% Free Tier)
+### Municipality of Limay, Bataan — Inter-Agency Case Management
+
+---
+
+## ⚠️ IMPORTANT: READ BEFORE BUILDING
+
+This app must:
+- Deploy to **Vercel** with zero config errors
+- Use **Supabase** as the only backend (no Express, no Node server)
+- Pass `npm run build` with **zero TypeScript errors**
+- Use **TypeScript** throughout for type safety
+- All environment variables via `.env.local` locally and Vercel Environment Variables in production
+- Work on **free tier** of both Supabase and Vercel
+
+---
+
+## 🛠️ EXACT TECH STACK
+
+```json
+{
+  "react": "^18.3.1",
+  "react-dom": "^18.3.1",
+  "react-router-dom": "^6.26.0",
+  "typescript": "^5.5.3",
+  "vite": "^5.4.1",
+  "@vitejs/plugin-react": "^4.3.1",
+  "@supabase/supabase-js": "^2.45.4",
+  "tailwindcss": "^3.4.10",
+  "autoprefixer": "^10.4.20",
+  "postcss": "^8.4.41",
+  "recharts": "^2.12.7",
+  "lucide-react": "^0.441.0",
+  "jspdf": "^2.5.1",
+  "html2canvas": "^1.4.1",
+  "date-fns": "^3.6.0"
+}
+```
+
+---
+
+## 📁 EXACT PROJECT STRUCTURE
+
+```
+limay-ireport/
+├── public/
+│   └── vite.svg
+├── src/
+│   ├── main.tsx
+│   ├── App.tsx
+│   ├── vite-env.d.ts
+│   ├── index.css
+│   ├── lib/
+│   │   └── supabase.ts
+│   ├── types/
+│   │   └── index.ts
+│   ├── hooks/
+│   │   ├── useAuth.ts
+│   │   ├── useCases.ts
+│   │   ├── useReferrals.ts
+│   │   └── useNotifications.ts
+│   ├── contexts/
+│   │   └── AuthContext.tsx
+│   ├── components/
+│   │   ├── layout/
+│   │   │   ├── Navbar.tsx
+│   │   │   ├── Sidebar.tsx
+│   │   │   └── Layout.tsx
+│   │   ├── auth/
+│   │   │   ├── LoginPage.tsx
+│   │   │   └── ProtectedRoute.tsx
+│   │   ├── cases/
+│   │   │   ├── CaseList.tsx
+│   │   │   ├── CaseForm.tsx
+│   │   │   ├── CaseDetail.tsx
+│   │   │   └── CasePrintView.tsx
+│   │   ├── referrals/
+│   │   │   ├── ReferralList.tsx
+│   │   │   ├── SendReferral.tsx
+│   │   │   └── ReferralInbox.tsx
+│   │   ├── reports/
+│   │   │   ├── SummaryReport.tsx
+│   │   │   └── PrintLayout.tsx
+│   │   ├── admin/
+│   │   │   ├── UserManagement.tsx
+│   │   │   ├── OfficeManagement.tsx
+│   │   │   └── SystemLogs.tsx
+│   │   ├── dashboard/
+│   │   │   ├── StatCards.tsx
+│   │   │   ├── CasesChart.tsx
+│   │   │   └── ActivityFeed.tsx
+│   │   └── shared/
+│   │       ├── Button.tsx
+│   │       ├── Modal.tsx
+│   │       ├── Badge.tsx
+│   │       ├── LoadingSpinner.tsx
+│   │       ├── EmptyState.tsx
+│   │       └── NotificationBell.tsx
+│   └── pages/
+│       ├── DashboardPage.tsx
+│       ├── CasesPage.tsx
+│       ├── CaseDetailPage.tsx
+│       ├── NewCasePage.tsx
+│       ├── ReferralsPage.tsx
+│       ├── ReportsPage.tsx
+│       └── AdminPage.tsx
+├── .env.local                ← gitignored
+├── .env.example              ← committed
+├── .gitignore
+├── vercel.json               ← REQUIRED for SPA routing
+├── vite.config.ts
+├── tsconfig.json
+├── tsconfig.node.json
+├── tailwind.config.js
+├── postcss.config.js
+└── package.json
+```
+
+---
+
+## ⚙️ CRITICAL CONFIG FILES
+
+### `vercel.json` — REQUIRED or all routes 404 on refresh
+```json
+{
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}
+```
+
+### `vite.config.ts`
+```typescript
+import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
+
+export default defineConfig({
+  plugins: [react()],
+  build: {
+    outDir: 'dist',
+    sourcemap: false,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          vendor: ['react', 'react-dom', 'react-router-dom'],
+          supabase: ['@supabase/supabase-js'],
+          charts: ['recharts'],
+        }
+      }
+    }
+  }
+})
+```
+
+### `.gitignore`
+```
+node_modules
+dist
+.env.local
+.env*.local
+*.log
+.DS_Store
+```
+
+### `.env.example`
+```
+VITE_SUPABASE_URL=https://your-project-id.supabase.co
+VITE_SUPABASE_ANON_KEY=your-anon-key-here
+```
+
+### `.env.local` (never commit this file)
+```
+VITE_SUPABASE_URL=https://inovdbudrzicbgkcnbpd.supabase.co
+VITE_SUPABASE_ANON_KEY=PASTE_YOUR_ANON_KEY_HERE
+```
+
+### `src/lib/supabase.ts`
+```typescript
+import { createClient } from '@supabase/supabase-js'
+
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string
+
+if (!supabaseUrl || !supabaseAnonKey) {
+  throw new Error('Missing Supabase environment variables.')
+}
+
+export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+```
+
+### `tsconfig.json`
+```json
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "useDefineForClassFields": true,
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "skipLibCheck": true,
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "strict": true,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "noFallthroughCasesInSwitch": true
+  },
+  "include": ["src"],
+  "references": [{ "path": "./tsconfig.node.json" }]
+}
+```
+
+### `tsconfig.node.json`
+```json
+{
+  "compilerOptions": {
+    "composite": true,
+    "skipLibCheck": true,
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "allowSyntheticDefaultImports": true
+  },
+  "include": ["vite.config.ts"]
+}
+```
+
+### `tailwind.config.js`
+```javascript
+/** @type {import('tailwindcss').Config} */
+module.exports = {
+  content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
+  theme: {
+    extend: {
+      colors: {
+        primary: {
+          50:  '#EFF4FB',
+          100: '#D9E4F4',
+          500: '#2B5BA8',
+          600: '#1B3A6B',
+          700: '#132C52',
+          900: '#0A1A33',
+        },
+        gold: {
+          400: '#F5A623',
+          500: '#E8960F',
+        }
+      },
+      fontFamily: {
+        sans: ['Inter', 'system-ui', 'sans-serif'],
+      }
+    }
+  },
+  plugins: []
+}
+```
+
+### `postcss.config.js`
+```javascript
+export default {
+  plugins: {
+    tailwindcss: {},
+    autoprefixer: {},
+  },
+}
+```
+
+### `src/index.css`
+```css
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    font-family: 'Inter', system-ui, sans-serif;
+    @apply bg-gray-50 text-gray-900;
+  }
+}
+
+@media print {
+  .no-print { display: none !important; }
+  .print-only { display: block !important; }
+  body { background: white; }
+}
+```
+
+---
+
+## 🗄️ SUPABASE FULL SQL SETUP
+
+Run this ENTIRE block in Supabase → SQL Editor → New Query → Run:
+
+```sql
+-- =============================================
+-- LIMAY iREPORT SYSTEM — Full Database Setup
+-- =============================================
+
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+-- OFFICES
+CREATE TABLE IF NOT EXISTS offices (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  name TEXT NOT NULL,
+  office_type TEXT NOT NULL CHECK (office_type IN ('barangay','pnp','mswd','munisipyo')),
+  address TEXT,
+  contact_number TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- PROFILES (linked to Supabase auth.users)
+CREATE TABLE IF NOT EXISTS profiles (
+  id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  full_name TEXT NOT NULL,
+  role TEXT NOT NULL DEFAULT 'encoder' CHECK (role IN ('super_admin','encoder','viewer')),
+  office_id UUID REFERENCES offices(id),
+  is_active BOOLEAN DEFAULT TRUE,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- CASES
+CREATE TABLE IF NOT EXISTS cases (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  case_number TEXT UNIQUE,
+  case_type TEXT NOT NULL CHECK (case_type IN ('vawc','blotter','referral','incident')),
+  status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open','ongoing','resolved','referred','closed')),
+  priority_level TEXT NOT NULL DEFAULT 'medium' CHECK (priority_level IN ('low','medium','high','urgent')),
+  date_filed DATE NOT NULL DEFAULT CURRENT_DATE,
+  date_of_incident DATE,
+  time_of_incident TIME,
+  is_confidential BOOLEAN DEFAULT FALSE,
+  filed_by_office_id UUID REFERENCES offices(id),
+  assigned_to_office_id UUID REFERENCES offices(id),
+  created_by_user_id UUID REFERENCES profiles(id),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- VICTIMS
+CREATE TABLE IF NOT EXISTS victims (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  case_id UUID NOT NULL REFERENCES cases(id) ON DELETE CASCADE,
+  last_name TEXT NOT NULL,
+  first_name TEXT NOT NULL,
+  middle_name TEXT,
+  age INTEGER,
+  sex TEXT CHECK (sex IN ('male','female','other')),
+  civil_status TEXT CHECK (civil_status IN ('single','married','widowed','separated','live-in')),
+  birthdate DATE,
+  address_barangay TEXT,
+  address_municipality TEXT DEFAULT 'Limay',
+  address_province TEXT DEFAULT 'Bataan',
+  contact_number TEXT,
+  occupation TEXT,
+  relationship_to_respondent TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- RESPONDENTS
+CREATE TABLE IF NOT EXISTS respondents (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  case_id UUID NOT NULL REFERENCES cases(id) ON DELETE CASCADE,
+  last_name TEXT,
+  first_name TEXT,
+  middle_name TEXT,
+  age INTEGER,
+  sex TEXT CHECK (sex IN ('male','female','other')),
+  address TEXT,
+  contact_number TEXT,
+  occupation TEXT,
+  is_known BOOLEAN DEFAULT TRUE,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- CASE NARRATIVES
+CREATE TABLE IF NOT EXISTS case_narratives (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  case_id UUID NOT NULL REFERENCES cases(id) ON DELETE CASCADE,
+  narrative_text TEXT NOT NULL,
+  written_by_user_id UUID REFERENCES profiles(id),
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- REFERRALS
+CREATE TABLE IF NOT EXISTS referrals (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  case_id UUID NOT NULL REFERENCES cases(id) ON DELETE CASCADE,
+  from_office_id UUID NOT NULL REFERENCES offices(id),
+  to_office_id UUID NOT NULL REFERENCES offices(id),
+  referral_reason TEXT,
+  referral_date TIMESTAMPTZ DEFAULT NOW(),
+  received_at TIMESTAMPTZ,
+  received_by_user_id UUID REFERENCES profiles(id),
+  status TEXT NOT NULL DEFAULT 'sent' CHECK (status IN ('sent','received','acknowledged','completed')),
+  notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- CASE ATTACHMENTS
+CREATE TABLE IF NOT EXISTS case_attachments (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  case_id UUID NOT NULL REFERENCES cases(id) ON DELETE CASCADE,
+  file_name TEXT NOT NULL,
+  file_url TEXT NOT NULL,
+  file_type TEXT,
+  file_size INTEGER,
+  uploaded_by_user_id UUID REFERENCES profiles(id),
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- CASE STATUS LOGS
+CREATE TABLE IF NOT EXISTS case_status_logs (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  case_id UUID NOT NULL REFERENCES cases(id) ON DELETE CASCADE,
+  old_status TEXT,
+  new_status TEXT NOT NULL,
+  changed_by_user_id UUID REFERENCES profiles(id),
+  notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- NOTIFICATIONS
+CREATE TABLE IF NOT EXISTS notifications (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  recipient_office_id UUID REFERENCES offices(id),
+  recipient_user_id UUID REFERENCES profiles(id),
+  case_id UUID REFERENCES cases(id) ON DELETE CASCADE,
+  message TEXT NOT NULL,
+  type TEXT NOT NULL CHECK (type IN ('new_case','referral_received','referral_update','status_change')),
+  is_read BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- AUTO CASE NUMBER TRIGGER
+CREATE OR REPLACE FUNCTION generate_case_number()
+RETURNS TRIGGER AS $$
+DECLARE
+  year_part TEXT;
+  seq_num INT;
+BEGIN
+  year_part := EXTRACT(YEAR FROM NOW())::TEXT;
+  SELECT COUNT(*) + 1 INTO seq_num FROM cases
+    WHERE EXTRACT(YEAR FROM created_at) = EXTRACT(YEAR FROM NOW());
+  NEW.case_number := 'LIM-' || year_part || '-' || LPAD(seq_num::TEXT, 4, '0');
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS set_case_number ON cases;
+CREATE TRIGGER set_case_number
+  BEFORE INSERT ON cases
+  FOR EACH ROW WHEN (NEW.case_number IS NULL)
+  EXECUTE FUNCTION generate_case_number();
+
+-- AUTO UPDATED_AT TRIGGER
+CREATE OR REPLACE FUNCTION update_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN NEW.updated_at = NOW(); RETURN NEW; END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS cases_updated_at ON cases;
+CREATE TRIGGER cases_updated_at
+  BEFORE UPDATE ON cases FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
+DROP TRIGGER IF EXISTS profiles_updated_at ON profiles;
+CREATE TRIGGER profiles_updated_at
+  BEFORE UPDATE ON profiles FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
+-- AUTO-CREATE PROFILE ON NEW AUTH USER
+CREATE OR REPLACE FUNCTION handle_new_user()
+RETURNS TRIGGER AS $$
+BEGIN
+  INSERT INTO profiles (id, full_name, role)
+  VALUES (
+    NEW.id,
+    COALESCE(NEW.raw_user_meta_data->>'full_name', 'New User'),
+    COALESCE(NEW.raw_user_meta_data->>'role', 'encoder')
+  ) ON CONFLICT (id) DO NOTHING;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW EXECUTE FUNCTION handle_new_user();
+
+-- ENABLE REALTIME
+ALTER PUBLICATION supabase_realtime ADD TABLE notifications;
+ALTER PUBLICATION supabase_realtime ADD TABLE referrals;
+
+-- ROW LEVEL SECURITY
+ALTER TABLE offices ENABLE ROW LEVEL SECURITY;
+ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE cases ENABLE ROW LEVEL SECURITY;
+ALTER TABLE victims ENABLE ROW LEVEL SECURITY;
+ALTER TABLE respondents ENABLE ROW LEVEL SECURITY;
+ALTER TABLE case_narratives ENABLE ROW LEVEL SECURITY;
+ALTER TABLE referrals ENABLE ROW LEVEL SECURITY;
+ALTER TABLE case_attachments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE case_status_logs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE notifications ENABLE ROW LEVEL SECURITY;
+
+-- HELPER FUNCTIONS
+CREATE OR REPLACE FUNCTION get_my_role()
+RETURNS TEXT AS $$
+  SELECT role FROM profiles WHERE id = auth.uid();
+$$ LANGUAGE SQL SECURITY DEFINER STABLE;
+
+CREATE OR REPLACE FUNCTION get_my_office_id()
+RETURNS UUID AS $$
+  SELECT office_id FROM profiles WHERE id = auth.uid();
+$$ LANGUAGE SQL SECURITY DEFINER STABLE;
+
+-- POLICIES: OFFICES
+DROP POLICY IF EXISTS "offices_read" ON offices;
+CREATE POLICY "offices_read" ON offices FOR SELECT TO authenticated USING (TRUE);
+DROP POLICY IF EXISTS "offices_admin_write" ON offices;
+CREATE POLICY "offices_admin_write" ON offices FOR ALL TO authenticated
+  USING (get_my_role() = 'super_admin') WITH CHECK (get_my_role() = 'super_admin');
+
+-- POLICIES: PROFILES
+DROP POLICY IF EXISTS "profiles_select" ON profiles;
+CREATE POLICY "profiles_select" ON profiles FOR SELECT TO authenticated
+  USING (id = auth.uid() OR get_my_role() = 'super_admin');
+DROP POLICY IF EXISTS "profiles_update" ON profiles;
+CREATE POLICY "profiles_update" ON profiles FOR UPDATE TO authenticated
+  USING (id = auth.uid() OR get_my_role() = 'super_admin');
+DROP POLICY IF EXISTS "profiles_insert" ON profiles;
+CREATE POLICY "profiles_insert" ON profiles FOR INSERT TO authenticated
+  WITH CHECK (id = auth.uid() OR get_my_role() = 'super_admin');
+DROP POLICY IF EXISTS "profiles_delete" ON profiles;
+CREATE POLICY "profiles_delete" ON profiles FOR DELETE TO authenticated
+  USING (get_my_role() = 'super_admin');
+
+-- POLICIES: CASES
+DROP POLICY IF EXISTS "cases_select" ON cases;
+CREATE POLICY "cases_select" ON cases FOR SELECT TO authenticated
+  USING (
+    get_my_role() = 'super_admin'
+    OR filed_by_office_id = get_my_office_id()
+    OR assigned_to_office_id = get_my_office_id()
+  );
+DROP POLICY IF EXISTS "cases_insert" ON cases;
+CREATE POLICY "cases_insert" ON cases FOR INSERT TO authenticated
+  WITH CHECK (get_my_role() IN ('super_admin','encoder'));
+DROP POLICY IF EXISTS "cases_update" ON cases;
+CREATE POLICY "cases_update" ON cases FOR UPDATE TO authenticated
+  USING (get_my_role() IN ('super_admin','encoder'));
+
+-- POLICIES: VICTIMS, RESPONDENTS, NARRATIVES, ATTACHMENTS, LOGS
+DROP POLICY IF EXISTS "victims_select" ON victims;
+CREATE POLICY "victims_select" ON victims FOR SELECT TO authenticated
+  USING (get_my_role() = 'super_admin' OR EXISTS (
+    SELECT 1 FROM cases c WHERE c.id = victims.case_id
+    AND (c.filed_by_office_id = get_my_office_id() OR c.assigned_to_office_id = get_my_office_id())
+  ));
+DROP POLICY IF EXISTS "victims_write" ON victims;
+CREATE POLICY "victims_write" ON victims FOR ALL TO authenticated
+  USING (get_my_role() IN ('super_admin','encoder'))
+  WITH CHECK (get_my_role() IN ('super_admin','encoder'));
+
+DROP POLICY IF EXISTS "respondents_select" ON respondents;
+CREATE POLICY "respondents_select" ON respondents FOR SELECT TO authenticated
+  USING (get_my_role() = 'super_admin' OR EXISTS (
+    SELECT 1 FROM cases c WHERE c.id = respondents.case_id
+    AND (c.filed_by_office_id = get_my_office_id() OR c.assigned_to_office_id = get_my_office_id())
+  ));
+DROP POLICY IF EXISTS "respondents_write" ON respondents;
+CREATE POLICY "respondents_write" ON respondents FOR ALL TO authenticated
+  USING (get_my_role() IN ('super_admin','encoder'))
+  WITH CHECK (get_my_role() IN ('super_admin','encoder'));
+
+DROP POLICY IF EXISTS "narratives_select" ON case_narratives;
+CREATE POLICY "narratives_select" ON case_narratives FOR SELECT TO authenticated
+  USING (get_my_role() = 'super_admin' OR EXISTS (
+    SELECT 1 FROM cases c WHERE c.id = case_narratives.case_id
+    AND (c.filed_by_office_id = get_my_office_id() OR c.assigned_to_office_id = get_my_office_id())
+  ));
+DROP POLICY IF EXISTS "narratives_write" ON case_narratives;
+CREATE POLICY "narratives_write" ON case_narratives FOR ALL TO authenticated
+  USING (get_my_role() IN ('super_admin','encoder'))
+  WITH CHECK (get_my_role() IN ('super_admin','encoder'));
+
+DROP POLICY IF EXISTS "attachments_select" ON case_attachments;
+CREATE POLICY "attachments_select" ON case_attachments FOR SELECT TO authenticated
+  USING (get_my_role() = 'super_admin' OR EXISTS (
+    SELECT 1 FROM cases c WHERE c.id = case_attachments.case_id
+    AND (c.filed_by_office_id = get_my_office_id() OR c.assigned_to_office_id = get_my_office_id())
+  ));
+DROP POLICY IF EXISTS "attachments_write" ON case_attachments;
+CREATE POLICY "attachments_write" ON case_attachments FOR ALL TO authenticated
+  USING (get_my_role() IN ('super_admin','encoder'))
+  WITH CHECK (get_my_role() IN ('super_admin','encoder'));
+
+DROP POLICY IF EXISTS "status_logs_select" ON case_status_logs;
+CREATE POLICY "status_logs_select" ON case_status_logs FOR SELECT TO authenticated
+  USING (get_my_role() = 'super_admin' OR EXISTS (
+    SELECT 1 FROM cases c WHERE c.id = case_status_logs.case_id
+    AND (c.filed_by_office_id = get_my_office_id() OR c.assigned_to_office_id = get_my_office_id())
+  ));
+DROP POLICY IF EXISTS "status_logs_write" ON case_status_logs;
+CREATE POLICY "status_logs_write" ON case_status_logs FOR ALL TO authenticated
+  USING (get_my_role() IN ('super_admin','encoder'))
+  WITH CHECK (get_my_role() IN ('super_admin','encoder'));
+
+-- POLICIES: REFERRALS
+DROP POLICY IF EXISTS "referrals_select" ON referrals;
+CREATE POLICY "referrals_select" ON referrals FOR SELECT TO authenticated
+  USING (get_my_role() = 'super_admin'
+    OR from_office_id = get_my_office_id()
+    OR to_office_id = get_my_office_id());
+DROP POLICY IF EXISTS "referrals_write" ON referrals;
+CREATE POLICY "referrals_write" ON referrals FOR ALL TO authenticated
+  USING (get_my_role() IN ('super_admin','encoder'))
+  WITH CHECK (get_my_role() IN ('super_admin','encoder'));
+
+-- POLICIES: NOTIFICATIONS
+DROP POLICY IF EXISTS "notifications_select" ON notifications;
+CREATE POLICY "notifications_select" ON notifications FOR SELECT TO authenticated
+  USING (get_my_role() = 'super_admin'
+    OR recipient_office_id = get_my_office_id()
+    OR recipient_user_id = auth.uid());
+DROP POLICY IF EXISTS "notifications_write" ON notifications;
+CREATE POLICY "notifications_write" ON notifications FOR ALL TO authenticated
+  USING (get_my_role() IN ('super_admin','encoder'))
+  WITH CHECK (get_my_role() IN ('super_admin','encoder'));
+
+-- STORAGE BUCKET
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('case-attachments', 'case-attachments', false)
+ON CONFLICT (id) DO NOTHING;
+
+DROP POLICY IF EXISTS "storage_upload" ON storage.objects;
+CREATE POLICY "storage_upload" ON storage.objects FOR INSERT TO authenticated
+  WITH CHECK (bucket_id = 'case-attachments');
+DROP POLICY IF EXISTS "storage_select" ON storage.objects;
+CREATE POLICY "storage_select" ON storage.objects FOR SELECT TO authenticated
+  USING (bucket_id = 'case-attachments');
+DROP POLICY IF EXISTS "storage_delete" ON storage.objects;
+CREATE POLICY "storage_delete" ON storage.objects FOR DELETE TO authenticated
+  USING (bucket_id = 'case-attachments');
+
+-- SEED: All Offices of Limay, Bataan
+INSERT INTO offices (name, office_type, address) VALUES
+  ('Barangay Alangan', 'barangay', 'Alangan, Limay, Bataan'),
+  ('Barangay Bilolo', 'barangay', 'Bilolo, Limay, Bataan'),
+  ('Barangay Builder', 'barangay', 'Builder, Limay, Bataan'),
+  ('Barangay Duale', 'barangay', 'Duale, Limay, Bataan'),
+  ('Barangay Lote', 'barangay', 'Lote, Limay, Bataan'),
+  ('Barangay Pag-asa', 'barangay', 'Pag-asa, Limay, Bataan'),
+  ('Barangay Poblacion', 'barangay', 'Poblacion, Limay, Bataan'),
+  ('Barangay Reformista', 'barangay', 'Reformista, Limay, Bataan'),
+  ('Barangay San Francisco de Asis', 'barangay', 'San Francisco de Asis, Limay, Bataan'),
+  ('Barangay Saysain', 'barangay', 'Saysain, Limay, Bataan'),
+  ('Barangay Wawa', 'barangay', 'Wawa, Limay, Bataan'),
+  ('PNP — Limay Municipal Police Station', 'pnp', 'Poblacion, Limay, Bataan'),
+  ('MSWD — Municipal Social Welfare and Development', 'mswd', 'Municipal Hall, Limay, Bataan'),
+  ('Munisipyo ng Limay — Mayor''s Office', 'munisipyo', 'Municipal Hall, Limay, Bataan')
+ON CONFLICT DO NOTHING;
+```
+
+---
+
+## 🔑 CREATE DEFAULT ADMIN USER
+
+After running SQL above:
+
+**Step 1** — Supabase Dashboard → Authentication → Users → **Add User**
+- Email: `admin@limay.gov.ph`
+- Password: `LimayAdmin2025!`
+- Auto Confirm: YES
+
+**Step 2** — Run in SQL Editor:
+```sql
+UPDATE profiles
+SET
+  full_name = 'System Administrator',
+  role = 'super_admin'
+WHERE id = (SELECT id FROM auth.users WHERE email = 'admin@limay.gov.ph');
+```
+
+---
+
+## 📱 APP FEATURES TO BUILD
+
+### LOGIN PAGE
+- Full-screen, centered card
+- Limay Municipal Hall branding (navy + gold)
+- Title: "LIMAY iREPORT SYSTEM"
+- Subtitle: "Isang Click, Isang Aksyon — Para sa Kaligtasan ng Bawat Limayeño"
+- Email + Password fields with validation
+- Show/hide password toggle
+- Loading spinner on submit
+- Error message display (wrong credentials, etc.)
+
+### LAYOUT (after login)
+- Fixed sidebar (desktop) / hamburger menu (mobile)
+- Top navbar with: office name, user name, notification bell, logout
+- Sidebar menu items: Dashboard, Cases, Referrals, Reports, Admin (super_admin only)
+- Notification bell with unread count badge
+- Realtime notification updates via Supabase Realtime
+
+### DASHBOARD
+- 4 stat cards: Total Cases, Open, Ongoing, Resolved
+- Monthly trend line chart (Recharts)
+- Cases by type donut chart
+- Cases by barangay bar chart
+- Recent activity feed (last 10 actions)
+- Pending referrals count
+
+### CASES MODULE
+
+**Case List:**
+- Searchable, filterable table
+- Columns: Case No. | Type | Victim | Status | Priority | Filed By | Date
+- Color-coded status badges
+- Color-coded priority badges
+- Filter by: type, status, priority, date range, office
+- Pagination (10 per page)
+- "New Case" button (encoder/admin only)
+
+**New Case Form (multi-step wizard):**
+- Step 1: Case Info (type, date of incident, time, priority, confidential toggle)
+- Step 2: Victim Info (complete personal info, address with Limay barangay dropdown)
+- Step 3: Respondent Info (or toggle "Unknown")
+- Step 4: Incident Narrative (large textarea, bilingual label)
+- Step 5: Attachments (file upload to Supabase Storage)
+- Step 6: Review & Submit
+- Case number auto-generated on save
+- Form validation on each step before proceeding
+
+**Case Detail:**
+- Full info display (all fields)
+- Status update button (encoder/admin)
+- "Refer to Office" button
+- Attachments with download links
+- Timeline of status changes + referral history
+- Print button (triggers print CSS)
+- Export to PDF button (jsPDF)
+
+### REFERRALS MODULE
+- Send Referral: select case → select office → reason → submit
+- Referral Inbox: list of referrals sent TO current user's office
+- Status: Sent → Received → Acknowledged → Completed
+- One-click acknowledge and complete buttons
+- Auto-notify receiving office (Supabase Realtime)
+
+### NOTIFICATIONS
+- Bell icon in navbar, badge shows unread count
+- Dropdown panel with last 10 notifications
+- Click notification → navigate to case
+- Mark all as read
+- Types: new case, referral received, referral status update, case status change
+- Realtime via Supabase channel subscription
+
+### REPORTS MODULE
+- Date range picker
+- Filter by: office, case type, status
+- Summary table with counts
+- Charts (reuse from dashboard)
+- Print button with government letterhead
+- PDF export with all data
+
+### ADMIN PANEL (super_admin only)
+
+**User Management:**
+- List all users: name, email, role, office, active status
+- Add new user (email, temp password, full name, role, office)
+- Edit user (role, office, active/inactive)
+- Cannot delete super_admin accounts
+
+**Office Management:**
+- View all 14 offices
+- Add/edit office details
+- View user count per office
+
+**System Logs:**
+- All case status changes with timestamp + user
+- All referrals sent/received
+- Export logs to PDF
+
+---
+
+## 🎨 DESIGN REQUIREMENTS
+
+- **Primary Color:** Deep Navy `#1B3A6B`
+- **Accent:** Gold `#F5A623`
+- **Font:** Inter (from Google Fonts)
+- **Style:** Clean government portal — professional, readable, trustworthy
+- **Responsive:** Desktop, tablet, mobile all work correctly
+- **Print CSS:** Clean printable layout, hide sidebar/navbar, show letterhead
+- **Labels:** Bilingual (English label with Filipino sub-label or placeholder)
+
+**Print letterhead format:**
+```
+Republic of the Philippines
+Province of Bataan
+MUNICIPALITY OF LIMAY
+[Seal Placeholder]
+Municipal Hall, Limay, Bataan
+Tel. No.: (047) XXX-XXXX
+
+LIMAY iREPORT SYSTEM
+[Document Title]
+Case No: LIM-YYYY-NNNN
+```
+
+---
+
+## 🚀 VERCEL DEPLOYMENT GUIDE
+
+### Step 1 — Initialize Git & push to GitHub
+```bash
+git init
+git add .
+git commit -m "feat: initial commit - Limay iReport System"
+git branch -M main
+git remote add origin https://github.com/YOUR_USERNAME/limay-ireport.git
+git push -u origin main
+```
+
+### Step 2 — Import to Vercel
+1. Go to [vercel.com/new](https://vercel.com/new)
+2. Click **"Import Git Repository"**
+3. Select your `limay-ireport` repo
+4. Framework Preset: **Vite** (auto-detected)
+5. Build Command: `npm run build`
+6. Output Directory: `dist`
+7. Install Command: `npm install`
+
+### Step 3 — Set Environment Variables in Vercel
+Go to Project Settings → Environment Variables → Add:
+```
+Name:  VITE_SUPABASE_URL
+Value: https://inovdbudrzicbgkcnbpd.supabase.co
+Environments: Production, Preview, Development
+
+Name:  VITE_SUPABASE_ANON_KEY
+Value: [your regenerated anon key]
+Environments: Production, Preview, Development
+```
+
+### Step 4 — Update Supabase Auth URLs
+Supabase Dashboard → Authentication → URL Configuration:
+- **Site URL:** `https://limay-ireport.vercel.app` (your actual Vercel URL)
+- **Redirect URLs:** Add:
+  - `https://limay-ireport.vercel.app/**`
+  - `http://localhost:5173/**`
+
+### Step 5 — Deploy!
+Click **Deploy** in Vercel. Should succeed in ~2 minutes.
+
+---
+
+## ✅ ZERO-ERROR BUILD CHECKLIST
+
+Before final deploy, verify ALL of these:
+
+- [ ] `npm run build` exits with code 0 (no errors)
+- [ ] `vercel.json` present with SPA rewrite rule
+- [ ] `.env.local` is in `.gitignore`
+- [ ] All TypeScript interfaces match Supabase table columns exactly
+- [ ] No `any` types that cause build errors
+- [ ] All imports are correct (no missing files)
+- [ ] All routes defined in `App.tsx` with React Router v6
+- [ ] `ProtectedRoute` wraps all authenticated pages
+- [ ] `AuthProvider` wraps entire app in `main.tsx`
+- [ ] Supabase env vars set in Vercel dashboard
+- [ ] SQL script ran successfully in Supabase
+- [ ] 14 offices seeded in database
+- [ ] Admin user created and role set to `super_admin`
+- [ ] Supabase redirect URLs updated with Vercel domain
+- [ ] Storage bucket `case-attachments` created
+- [ ] Realtime enabled on `notifications` and `referrals` tables
+- [ ] App tested: login, create case, refer, print — all work
+- [ ] 404 does NOT appear on page refresh (vercel.json working)
+
+---
+
+## 🐛 COMMON ERRORS & FIXES
+
+| Error | Cause | Fix |
+|-------|-------|-----|
+| 404 on page refresh | Missing `vercel.json` | Add the rewrites config |
+| `VITE_*` vars undefined in prod | Not set in Vercel | Add in Project → Settings → Env Vars |
+| White screen / blank app | JS error on load | Check browser console, verify Supabase keys |
+| RLS: "new row violates RLS" | Policy not allowing insert | Check `WITH CHECK` on insert policies |
+| Auth redirect loop | Supabase site URL wrong | Update in Supabase Auth settings |
+| TypeScript build errors | Interface mismatch | Match TS types exactly to DB columns |
+| `Cannot read property of undefined` | Missing null checks | Use optional chaining `?.` everywhere |
+| Realtime not working | Table not in publication | Run `ALTER PUBLICATION supabase_realtime ADD TABLE ...` |
+
+---
+
+## 📋 COMPLETE FEATURE TABLE
+
+| Feature | Super Admin | Encoder | Viewer |
+|---------|------------|---------|--------|
+| Login | ✅ | ✅ | ✅ |
+| Dashboard + Charts | ✅ All | ✅ Own office | ✅ Own office |
+| View cases | ✅ All | ✅ Own office | ✅ Own office |
+| Create new case | ✅ | ✅ | ❌ |
+| Edit case | ✅ | ✅ Own only | ❌ |
+| Update status | ✅ | ✅ | ❌ |
+| Upload attachments | ✅ | ✅ | ❌ |
+| Send referral | ✅ | ✅ | ❌ |
+| View referrals | ✅ All | ✅ Own office | ✅ Own office |
+| Acknowledge referral | ✅ | ✅ | ❌ |
+| Print case | ✅ | ✅ | ✅ |
+| Export PDF | ✅ | ✅ | ✅ |
+| Summary reports | ✅ | ✅ Own | ✅ Own |
+| Notifications (realtime) | ✅ | ✅ | ✅ |
+| Manage users | ✅ | ❌ | ❌ |
+| Manage offices | ✅ | ❌ | ❌ |
+| View system logs | ✅ | ❌ | ❌ |
+
+---
+
+*LIMAY iREPORT SYSTEM*
+*Municipality of Limay, Bataan*
+*Supabase: inovdbudrzicbgkcnbpd*
+*Stack: React 18 + Vite + TypeScript + Supabase + Vercel*
+*Cost: FREE (all free tiers)*
