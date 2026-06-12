@@ -1,7 +1,7 @@
 import { ReactNode } from 'react'
 import { Redirect } from 'wouter'
 import { Shield } from 'lucide-react'
-import { useAuth } from '@/contexts/AuthContext'
+import { useAuth } from '@/context/AuthContext'
 import { Button } from '@/components/ui/button'
 import { useLocation } from 'wouter'
 
@@ -43,22 +43,13 @@ function ForbiddenPage() {
 
 export function ProtectedRoute({ children, requiredRole }: ProtectedRouteProps) {
   const { profile, loading } = useAuth()
-
-  // While checking session — show spinner (prevents flash of login page on refresh)
   if (loading) return <FullPageSpinner />
-
-  // Not logged in → go to login
   if (!profile) return <Redirect to="/login" />
-
-  // Admin-only route — show 403 instead of silent redirect
   if (requiredRole === 'super_admin' && profile.role !== 'super_admin') {
     return <ForbiddenPage />
   }
-
-  // Encoder-or-above required (viewer blocked)
   if (requiredRole === 'encoder' && profile.role === 'viewer') {
     return <ForbiddenPage />
   }
-
   return <>{children}</>
 }
