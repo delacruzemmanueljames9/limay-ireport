@@ -12,13 +12,25 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | null>(null)
 
 async function fetchProfile(userId: string): Promise<Profile | null> {
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('id, full_name, role, office_id')
-    .eq('id', userId)
-    .single()
-  if (error) return null
-  return data as Profile
+  try {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('id, full_name, role, office_id, is_active, created_at, updated_at')
+      .eq('id', userId)
+      .maybeSingle()
+    if (error || !data) return null
+    return {
+      id: data.id,
+      full_name: data.full_name,
+      role: data.role,
+      office_id: data.office_id,
+      is_active: data.is_active,
+      created_at: data.created_at,
+      updated_at: data.updated_at,
+    } as Profile
+  } catch {
+    return null
+  }
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -63,6 +75,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function signOut() {
     await supabase.auth.signOut()
+    setProfile(null)
+    window.location.href = '/login'
   }
 
   return (
