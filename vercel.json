@@ -3,5 +3,6 @@
   "outputDirectory": "artifacts/limay-ireport/dist/public",
   "rewrites": [
     { "source": "/(.*)", "destination": "/index.html" }
-  ]
+  ],
+  "regions": ["sin1"]
 }
