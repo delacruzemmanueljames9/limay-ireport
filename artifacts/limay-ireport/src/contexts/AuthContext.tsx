@@ -51,66 +51,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function signIn(email: string, password: string) {
     try {
-      const result = await Promise.race([
-        supabase.auth.signInWithPassword({ email, password }),
-        new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error('Request timed out. Please try again.')), 10000)
-        )
-      ])
-      const { data, error } = result as Awaited<ReturnType<typeof supabase.auth.signInWithPassword>>
-      if (error) return { error: error.message }
-      if (data.user) {
-        const p = await getProfile(data.user.id)
+      const timeoutPromise = new Promise<{ data: null; error: Error }>(resolve =>
+        setTimeout(() => resolve({ data: null, error: new Error('Request timed out. Please try again.') }), 10000)
+      )
+      const authPromise = supabase.auth.signInWithPassword({ email, password })
+      const result = await Promise.race([authPromise, timeoutPromise])
+      if (result.error) return { error: result.error.message }
+      if (result.data && 'user' in result.data && result.data.user) {
+        const p = await getProfile(result.data.user.id)
         setProfile(p)
       }
       return { error: null }
     } catch (err: unknown) {
       return { error: err instanceof Error ? err.message : 'Something went wrong.' }
     }
-  }
-
-  async function signOut() {
-    await supabase.auth.signOut()
-    setProfile(null)
-    window.location.href = '/login'
-  }
-
-  return (
-    <AuthContext.Provider value={{ profile, loading, signIn, signOut }}>
-      {children}
-    </AuthContext.Provider>
-  )
-}
-
-export function useAuth() {
-  const ctx = useContext(AuthContext)
-  if (!ctx) throw new Error('useAuth must be used within AuthProvider')
-  return ctx
-}        if (event === 'SIGNED_OUT' || !session?.user) {
-          setProfile(null)
-          setLoading(false)
-          return
-        }
-        const p = await getProfile(session.user.id)
-        setProfile(p)
-        setLoading(false)
-      }
-    )
-
-    return () => {
-      clearTimeout(timer)
-      subscription.unsubscribe()
-    }
-  }, [])
-
-  async function signIn(email: string, password: string) {
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password })
-    if (error) return { error: error.message }
-    if (data.user) {
-      const p = await getProfile(data.user.id)
-      setProfile(p)
-    }
-    return { error: null }
   }
 
   async function signOut() {
