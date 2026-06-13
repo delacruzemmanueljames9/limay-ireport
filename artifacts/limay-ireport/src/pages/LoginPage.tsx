@@ -1,22 +1,19 @@
 import { useState } from 'react'
-import { Redirect } from 'wouter'
 import { Eye, EyeOff, Shield, Loader2 } from 'lucide-react'
-import { supabase } from '@/lib/supabase'
-import { useAuth } from '@/contexts/AuthContext'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent } from '@/components/ui/card'
 
+const SUPABASE_URL = 'https://inovdbudrzicbgkcnbpd.supabase.co'
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imlub3ZkYnVkcnppY2Jna2NuYnBkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEyNDY1NzEsImV4cCI6MjA5NjgyMjU3MX0.fBJ418qpVpnGusbFPV9_GriTF2OttI7-lCHdLUxZbZU'
+
 export default function LoginPage() {
-  const { profile } = useAuth()
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
-
-  if (profile) return <Redirect to="/dashboard" />
 
   async function handleLogin() {
     if (!username || !password) {
@@ -25,10 +22,36 @@ export default function LoginPage() {
     }
     setError(null)
     setSubmitting(true)
+
     const email = username.includes('@') ? username : username + '@limay.gov.ph'
-    const { error: authError } = await supabase.auth.signInWithPassword({ email, password })
-    if (authError) {
-      setError('Invalid username or password.')
+
+    try {
+      const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': SUPABASE_ANON_KEY,
+        },
+        body: JSON.stringify({ email, password }),
+      })
+
+      const data = await res.json()
+
+      if (!res.ok || data.error) {
+        setError('Invalid username or password.')
+        setSubmitting(false)
+        return
+      }
+
+      localStorage.setItem('sb-session', JSON.stringify({
+        access_token: data.access_token,
+        refresh_token: data.refresh_token,
+        user: data.user,
+      }))
+
+      window.location.href = '/dashboard'
+    } catch {
+      setError('Connection error. Please try again.')
       setSubmitting(false)
     }
   }
@@ -48,7 +71,7 @@ export default function LoginPage() {
         <Card className="shadow-2xl border-0">
           <CardContent className="p-6 md:p-8">
             <div className="mb-6">
-              <h2 className="text-lg font-semibold text-foreground">Sign In</h2>
+              <h2 className="text-lg font-semibent text-foreground">Sign In</h2>
               <p className="text-sm text-muted-foreground">Enter your credentials to access the system</p>
             </div>
             <div className="space-y-4">
