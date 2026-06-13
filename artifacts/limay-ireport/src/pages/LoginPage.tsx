@@ -1,18 +1,31 @@
 import { useState } from 'react'
-import { useLocation } from 'wouter'
+import { Redirect } from 'wouter'
 import { Eye, EyeOff, Shield, Loader2 } from 'lucide-react'
+import { useAuth } from '@/contexts/AuthContext'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent } from '@/components/ui/card'
 
 export default function LoginPage() {
-  const [, setLocation] = useLocation()
+  const { signIn, profile, loading } = useAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[hsl(218,64%,22%)]">
+        <div className="h-8 w-8 rounded-full border-4 border-white/30 border-t-white animate-spin" />
+      </div>
+    )
+  }
+
+  if (profile) {
+    return <Redirect to="/dashboard" />
+  }
 
   async function handleLogin() {
     if (!email || !password) {
@@ -21,16 +34,11 @@ export default function LoginPage() {
     }
     setError(null)
     setSubmitting(true)
-
-    // Bypass: hardcoded check muna
-    if (email === 'admin@limay.gov.ph' && password === 'LimayAdmin2025!') {
-      localStorage.setItem('dev_auth', 'true')
-      setLocation('/dashboard')
-      return
+    const { error: err } = await signIn(email, password)
+    if (err) {
+      setError(err)
+      setSubmitting(false)
     }
-
-    setError('Invalid email or password.')
-    setSubmitting(false)
   }
 
   return (
