@@ -15,7 +15,7 @@ async function getProfile(userId: string): Promise<Profile | null> {
   try {
     const { data } = await supabase
       .from('profiles')
-      .select('*, office:offices(*)')
+      .select('id, full_name, role, office_id, is_active, created_at, updated_at')
       .eq('id', userId)
       .maybeSingle()
     return (data as Profile) ?? null
@@ -29,64 +29,56 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    let done = false
-
-    const finish = (p: Profile | null) => {
-      if (done) return
-      done = true
-      setProfile(p)
-      setLoading(false)
-    }
-
-    const timeout = setTimeout(() => finish(null), 5000)
-
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      if (!session?.user) return finish(null)
-      const p = await getProfile(session.user.id)
-      clearTimeout(timeout)
-      finish(p)
-    }).catch(() => finish(null))
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        if (event === 'SIGNED_OUT') {
-          finish(null)
+    async function loadSession() {
+      try {
+        const raw = localStorage.getItem('sb-session')
+        if (!raw) {
+          setLoading(false)
           return
         }
-        if (session?.user) {
-          const p = await getProfile(session.user.id)
-          clearTimeout(timeout)
-          finish(p)
+        const session = JSON.parse(raw)
+        if (!session?.user?.id) {
+          setLoading(false)
+          return
         }
+        const p = await getProfile(session.user.id)
+        setProfile(p)
+      } catch {
+        // ignore
+      } finally {
+        setLoading(false)
       }
-    )
-
-    return () => {
-      clearTimeout(timeout)
-      subscription.unsubscribe()
     }
+    loadSession()
   }, [])
 
   async function signIn(email: string, password: string) {
     try {
-      const timeoutPromise = new Promise<{ data: null; error: Error }>(resolve =>
-        setTimeout(() => resolve({ data: null, error: new Error('Connection timed out. Please try again.') }), 15000)
-      )
-      const authPromise = supabase.auth.signInWithPassword({ email, password })
-      const result = await Promise.race([authPromise, timeoutPromise]) as Awaited<ReturnType<typeof supabase.auth.signInWithPassword>>
-      if (result.error) return { error: result.error.message }
-      if (result.data?.user) {
-        const p = await getProfile(result.data.user.id)
-        setProfile(p)
-      }
+      const res = await fetch('https://inovdbudrzicbgkcnbpd.supabase.co/auth/v1/token?grant_type=password', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imlub3ZkYnVkcnppY2Jna2NuYnBkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEyNDY1NzEsImV4cCI6MjA5NjgyMjU3MX0.fBJ418qpVpnGusbFPV9_GriTF2OttI7-lCHdLUxZbZU',
+        },
+        body: JSON.stringify({ email, password }),
+      })
+      const data = await res.json()
+      if (!res.ok || data.error) return { error: data.error_description || 'Invalid credentials.' }
+      localStorage.setItem('sb-session', JSON.stringify({
+        access_token: data.access_token,
+        refresh_token: data.refresh_token,
+        user: data.user,
+      }))
+      const p = await getProfile(data.user.id)
+      setProfile(p)
       return { error: null }
-    } catch (err: unknown) {
-      return { error: err instanceof Error ? err.message : 'Something went wrong.' }
+    } catch {
+      return { error: 'Connection error. Please try again.' }
     }
   }
 
   async function signOut() {
-    await supabase.auth.signOut()
+    localStorage.removeItem('sb-session')
     setProfile(null)
     window.location.href = '/login'
   }
