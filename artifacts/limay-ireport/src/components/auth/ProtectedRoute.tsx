@@ -10,17 +10,6 @@ interface ProtectedRouteProps {
   requiredRole?: 'super_admin' | 'encoder'
 }
 
-function FullPageSpinner() {
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-background">
-      <div className="flex flex-col items-center gap-3">
-        <div className="h-8 w-8 rounded-full border-4 border-primary border-t-transparent animate-spin" />
-        <p className="text-sm text-muted-foreground">Loading...</p>
-      </div>
-    </div>
-  )
-}
-
 function ForbiddenPage() {
   const [, setLocation] = useLocation()
   return (
@@ -33,9 +22,7 @@ function ForbiddenPage() {
         <p className="text-muted-foreground text-sm mb-6">
           You don't have permission to access this page. Contact your system administrator.
         </p>
-        <Button onClick={() => setLocation('/dashboard')}>
-          Go to Dashboard
-        </Button>
+        <Button onClick={() => setLocation('/dashboard')}>Go to Dashboard</Button>
       </div>
     </div>
   )
@@ -43,13 +30,35 @@ function ForbiddenPage() {
 
 export function ProtectedRoute({ children, requiredRole }: ProtectedRouteProps) {
   const { profile, loading } = useAuth()
-  if (loading) return <FullPageSpinner />
-  if (!profile) return <Redirect to="/login" />
-  if (requiredRole === 'super_admin' && profile.role !== 'super_admin') {
-    return <ForbiddenPage />
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="h-8 w-8 rounded-full border-4 border-primary border-t-transparent animate-spin" />
+      </div>
+    )
   }
-  if (requiredRole === 'encoder' && profile.role === 'viewer') {
-    return <ForbiddenPage />
+
+  // Check localStorage directly as fallback
+  if (!profile) {
+    try {
+      const raw = localStorage.getItem('sb-session')
+      if (!raw) return <Redirect to="/login" />
+      const session = JSON.parse(raw)
+      if (!session?.user?.id) return <Redirect to="/login" />
+      // Session exists but profile not loaded yet — show spinner
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-background">
+          <div className="h-8 w-8 rounded-full border-4 border-primary border-t-transparent animate-spin" />
+        </div>
+      )
+    } catch {
+      return <Redirect to="/login" />
+    }
   }
+
+  if (requiredRole === 'super_admin' && profile.role !== 'super_admin') return <ForbiddenPage />
+  if (requiredRole === 'encoder' && profile.role === 'viewer') return <ForbiddenPage />
+
   return <>{children}</>
 }
