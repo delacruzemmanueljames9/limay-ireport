@@ -60,6 +60,17 @@ const initial: FormData = {
   narrative_text: '', attachments: [],
 }
 
+// F component defined OUTSIDE to prevent re-mount on every render
+function F({ label, sub, error, children }: { label: string; sub?: string; error?: string; children: React.ReactNode }) {
+  return (
+    <div className="space-y-1.5">
+      <Label>{label}{sub && <span className="text-muted-foreground ml-1 text-xs">/ {sub}</span>}</Label>
+      {children}
+      {error && <p className="text-xs text-destructive">{error}</p>}
+    </div>
+  )
+}
+
 export default function NewCasePage() {
   const { profile } = useAuth()
   const { offices } = useOffices()
@@ -187,14 +198,6 @@ export default function NewCasePage() {
     setSubmitting(false)
   }
 
-  const F = ({ label, sub, error, children }: { label: string; sub?: string; error?: string; children: React.ReactNode }) => (
-    <div className="space-y-1.5">
-      <Label>{label}{sub && <span className="text-muted-foreground ml-1 text-xs">/ {sub}</span>}</Label>
-      {children}
-      {error && <p className="text-xs text-destructive">{error}</p>}
-    </div>
-  )
-
   return (
     <Layout>
       <div className="max-w-2xl mx-auto space-y-6">
@@ -222,7 +225,7 @@ export default function NewCasePage() {
               <>
                 <F label="Case Type / Uri ng Kaso" error={errors.case_type}>
                   <Select value={form.case_type} onValueChange={v => set('case_type', v)}>
-                    <SelectTrigger data-testid="select-case-type"><SelectValue placeholder="Select type..." /></SelectTrigger>
+                    <SelectTrigger><SelectValue placeholder="Select type..." /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="vawc">VAWC</SelectItem>
                       <SelectItem value="blotter">Blotter</SelectItem>
@@ -233,15 +236,15 @@ export default function NewCasePage() {
                 </F>
                 <div className="grid grid-cols-2 gap-4">
                   <F label="Date of Incident / Petsa">
-                    <Input type="date" value={form.date_of_incident} onChange={e => set('date_of_incident', e.target.value)} data-testid="input-date-incident" />
+                    <Input type="date" value={form.date_of_incident} onChange={e => set('date_of_incident', e.target.value)} />
                   </F>
                   <F label="Time / Oras">
-                    <Input type="time" value={form.time_of_incident} onChange={e => set('time_of_incident', e.target.value)} data-testid="input-time-incident" />
+                    <Input type="time" value={form.time_of_incident} onChange={e => set('time_of_incident', e.target.value)} />
                   </F>
                 </div>
                 <F label="Priority Level / Antas ng Priyoridad" error={errors.priority_level}>
                   <Select value={form.priority_level} onValueChange={v => set('priority_level', v)}>
-                    <SelectTrigger data-testid="select-priority"><SelectValue /></SelectTrigger>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="low">Low / Mababa</SelectItem>
                       <SelectItem value="medium">Medium / Katamtaman</SelectItem>
@@ -252,14 +255,14 @@ export default function NewCasePage() {
                 </F>
                 <F label="Assign to Office">
                   <Select value={form.assigned_to_office_id} onValueChange={v => set('assigned_to_office_id', v)}>
-                    <SelectTrigger data-testid="select-assigned-office"><SelectValue placeholder="Select office..." /></SelectTrigger>
+                    <SelectTrigger><SelectValue placeholder="Select office..." /></SelectTrigger>
                     <SelectContent>
                       {offices.map(o => <SelectItem key={o.id} value={o.id}>{o.name}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </F>
                 <div className="flex items-center gap-3 p-3 bg-muted/40 rounded-md">
-                  <Switch checked={form.is_confidential} onCheckedChange={v => set('is_confidential', v)} data-testid="switch-confidential" />
+                  <Switch checked={form.is_confidential} onCheckedChange={v => set('is_confidential', v)} />
                   <div>
                     <p className="text-sm font-medium">Confidential / Lihim</p>
                     <p className="text-xs text-muted-foreground">Mark this case as confidential</p>
@@ -272,10 +275,10 @@ export default function NewCasePage() {
               <>
                 <div className="grid grid-cols-3 gap-3">
                   <F label="Last Name / Apelyido" error={errors.victim_last_name}>
-                    <Input value={form.victim_last_name} onChange={e => set('victim_last_name', e.target.value)} data-testid="input-victim-lastname" />
+                    <Input value={form.victim_last_name} onChange={e => set('victim_last_name', e.target.value)} />
                   </F>
                   <F label="First Name / Pangalan" error={errors.victim_first_name}>
-                    <Input value={form.victim_first_name} onChange={e => set('victim_first_name', e.target.value)} data-testid="input-victim-firstname" />
+                    <Input value={form.victim_first_name} onChange={e => set('victim_first_name', e.target.value)} />
                   </F>
                   <F label="Middle Name">
                     <Input value={form.victim_middle_name} onChange={e => set('victim_middle_name', e.target.value)} />
@@ -283,7 +286,7 @@ export default function NewCasePage() {
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <F label="Age / Edad">
-                    <Input type="number" min="0" value={form.victim_age} onChange={e => set('victim_age', e.target.value)} data-testid="input-victim-age" />
+                    <Input type="number" min="0" value={form.victim_age} onChange={e => set('victim_age', e.target.value)} />
                   </F>
                   <F label="Birthdate / Kaarawan">
                     <Input type="date" value={form.victim_birthdate} onChange={e => set('victim_birthdate', e.target.value)} />
@@ -292,7 +295,7 @@ export default function NewCasePage() {
                 <div className="grid grid-cols-2 gap-4">
                   <F label="Sex / Kasarian">
                     <Select value={form.victim_sex} onValueChange={v => set('victim_sex', v)}>
-                      <SelectTrigger data-testid="select-victim-sex"><SelectValue placeholder="Select..." /></SelectTrigger>
+                      <SelectTrigger><SelectValue placeholder="Select..." /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="male">Male / Lalaki</SelectItem>
                         <SelectItem value="female">Female / Babae</SelectItem>
@@ -315,7 +318,7 @@ export default function NewCasePage() {
                 </div>
                 <F label="Barangay">
                   <Select value={form.victim_address_barangay} onValueChange={v => set('victim_address_barangay', v)}>
-                    <SelectTrigger data-testid="select-victim-barangay"><SelectValue placeholder="Select barangay..." /></SelectTrigger>
+                    <SelectTrigger><SelectValue placeholder="Select barangay..." /></SelectTrigger>
                     <SelectContent>
                       {LIMAY_BARANGAYS.map(b => <SelectItem key={b} value={b}>Brgy. {b}</SelectItem>)}
                     </SelectContent>
@@ -338,7 +341,7 @@ export default function NewCasePage() {
             {step === 2 && (
               <>
                 <div className="flex items-center gap-3 p-3 bg-muted/40 rounded-md">
-                  <Switch checked={form.respondent_unknown} onCheckedChange={v => set('respondent_unknown', v)} data-testid="switch-unknown-respondent" />
+                  <Switch checked={form.respondent_unknown} onCheckedChange={v => set('respondent_unknown', v)} />
                   <div>
                     <p className="text-sm font-medium">Unknown Respondent / Hindi Kilala</p>
                     <p className="text-xs text-muted-foreground">Toggle if respondent identity is unknown</p>
@@ -381,7 +384,6 @@ export default function NewCasePage() {
                   onChange={e => set('narrative_text', e.target.value)}
                   placeholder="Ilarawan ang insidente / Describe the incident in detail..."
                   className="min-h-[200px] resize-y"
-                  data-testid="input-narrative"
                 />
                 <p className="text-xs text-muted-foreground">{form.narrative_text.length} characters</p>
               </F>
@@ -397,7 +399,7 @@ export default function NewCasePage() {
                   <input type="file" multiple className="hidden" onChange={e => {
                     const files = Array.from(e.target.files ?? [])
                     set('attachments', [...form.attachments, ...files])
-                  }} data-testid="input-attachments" />
+                  }} />
                 </label>
                 {form.attachments.length > 0 && (
                   <div className="space-y-2">
@@ -436,6 +438,7 @@ export default function NewCasePage() {
                 )}
               </div>
             )}
+
           </CardContent>
         </Card>
 
@@ -444,11 +447,11 @@ export default function NewCasePage() {
             <ChevronLeft className="h-4 w-4 mr-1" /> Back
           </Button>
           {step < STEPS.length - 1 ? (
-            <Button onClick={next} data-testid="button-next-step">
+            <Button onClick={next}>
               Next <ChevronRight className="h-4 w-4 ml-1" />
             </Button>
           ) : (
-            <Button onClick={handleSubmit} disabled={submitting} data-testid="button-submit-case">
+            <Button onClick={handleSubmit} disabled={submitting}>
               {submitting ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Submitting...</> : <><Check className="h-4 w-4 mr-1" /> Submit Case</>}
             </Button>
           )}
