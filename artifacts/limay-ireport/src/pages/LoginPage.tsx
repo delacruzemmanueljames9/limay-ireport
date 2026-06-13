@@ -1,31 +1,18 @@
 import { useState } from 'react'
-import { Redirect } from 'wouter'
+import { useLocation } from 'wouter'
 import { Eye, EyeOff, Shield, Loader2 } from 'lucide-react'
-import { useAuth } from '@/contexts/AuthContext'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent } from '@/components/ui/card'
 
 export default function LoginPage() {
-  const { signIn, profile, loading } = useAuth()
+  const [, setLocation] = useLocation()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
-
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-[hsl(218,64%,22%)]">
-        <div className="h-8 w-8 rounded-full border-4 border-white/30 border-t-white animate-spin" />
-      </div>
-    )
-  }
-
-  if (profile) {
-    return <Redirect to="/dashboard" />
-  }
 
   async function handleLogin() {
     if (!email || !password) {
@@ -34,29 +21,20 @@ export default function LoginPage() {
     }
     setError(null)
     setSubmitting(true)
-    const { error: err } = await signIn(email, password)
-    if (err) {
-      const msg = err.toLowerCase()
-      if (msg.includes('invalid') || msg.includes('credentials') || msg.includes('password')) {
-        setError('Invalid email or password. Please try again.')
-      } else if (msg.includes('email not confirmed')) {
-        setError('Please verify your email address before signing in.')
-      } else {
-        setError(err)
-      }
-      setSubmitting(false)
+
+    // Bypass: hardcoded check muna
+    if (email === 'admin@limay.gov.ph' && password === 'LimayAdmin2025!') {
+      localStorage.setItem('dev_auth', 'true')
+      setLocation('/dashboard')
+      return
     }
+
+    setError('Invalid email or password.')
+    setSubmitting(false)
   }
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-[hsl(218,64%,22%)] px-4">
-      <div
-        className="absolute inset-0 opacity-5 pointer-events-none"
-        style={{
-          backgroundImage: 'radial-gradient(circle at 25px 25px, white 2px, transparent 0)',
-          backgroundSize: '50px 50px',
-        }}
-      />
       <div className="relative w-full max-w-md">
         <div className="flex flex-col items-center mb-8">
           <div className="h-20 w-20 rounded-full bg-[hsl(38,90%,55%)] flex items-center justify-center mb-4 shadow-lg">
@@ -69,7 +47,6 @@ export default function LoginPage() {
             "Isang Click, Isang Aksyon — Para sa Kaligtasan ng Bawat Limayeño"
           </p>
         </div>
-
         <Card className="shadow-2xl border-0">
           <CardContent className="p-6 md:p-8">
             <div className="mb-6">
@@ -131,7 +108,6 @@ export default function LoginPage() {
             </div>
           </CardContent>
         </Card>
-
         <p className="text-center text-xs text-white/40 mt-6">
           Republic of the Philippines &bull; Province of Bataan<br />
           Municipality of Limay &bull; Official Government System
