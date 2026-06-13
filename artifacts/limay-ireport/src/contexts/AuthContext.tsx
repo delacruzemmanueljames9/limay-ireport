@@ -11,45 +11,42 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | null>(null)
 
+async function getProfile(userId: string): Promise<Profile | null> {
+  try {
+    const { data } = await supabase
+      .from('profiles')
+      .select('id, full_name, role, office_id, is_active, created_at, updated_at')
+      .eq('id', userId)
+      .maybeSingle()
+    return (data as Profile) ?? null
+  } catch {
+    return null
+  }
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    // Always stop loading after 3 seconds max
-    const timeout = setTimeout(() => setLoading(false), 3000)
-
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      clearTimeout(timeout)
-      if (session?.user) {
-        const { data } = await supabase
-          .from('profiles')
-          .select('id, full_name, role, office_id, is_active, created_at, updated_at')
-          .eq('id', session.user.id)
-          .maybeSingle()
-        setProfile(data as Profile ?? null)
-      }
-      setLoading(false)
-    })
+    const timer = setTimeout(() => setLoading(false), 4000)
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        if (event === 'SIGNED_OUT') {
+        clearTimeout(timer)
+        if (event === 'SIGNED_OUT' || !session?.user) {
           setProfile(null)
+          setLoading(false)
           return
         }
-        if (session?.user) {
-          const { data } = await supabase
-            .from('profiles')
-            .select('id, full_name, role, office_id, is_active, created_at, updated_at')
-            .eq('id', session.user.id)
-            .maybeSingle()
-          setProfile(data as Profile ?? null)
-        }
+        const p = await getProfile(session.user.id)
+        setProfile(p)
+        setLoading(false)
       }
     )
+
     return () => {
-      clearTimeout(timeout)
+      clearTimeout(timer)
       subscription.unsubscribe()
     }
   }, [])
@@ -58,12 +55,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) return { error: error.message }
     if (data.user) {
-      const { data: p } = await supabase
-        .from('profiles')
-        .select('id, full_name, role, office_id, is_active, created_at, updated_at')
-        .eq('id', data.user.id)
-        .maybeSingle()
-      setProfile(p as Profile ?? null)
+      const p = await getProfile(data.user.id)
+      setProfile(p)
     }
     return { error: null }
   }
