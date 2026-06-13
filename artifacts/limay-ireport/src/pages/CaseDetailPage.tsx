@@ -8,13 +8,16 @@ import { Layout } from '@/components/layout/Layout'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
+import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Printer, ArrowLeftRight, ChevronLeft, Download, Clock, FileText, User, Users, Trash2 } from 'lucide-react'
+import { Printer, ArrowLeftRight, ChevronLeft, Download, Clock, FileText, User, Users, Trash2, Lock } from 'lucide-react'
 import { CASE_TYPE_LABELS, CASE_STATUS_LABELS, PRIORITY_LABELS } from '@/types'
 import type { CaseStatus, PriorityLevel } from '@/types'
+
+const CONFIDENTIAL_CODE = 'open25'
 
 const STATUS_BADGE: Record<CaseStatus, string> = {
   open: 'bg-blue-100 text-blue-700 border-blue-200',
@@ -58,8 +61,26 @@ export default function CaseDetailPage() {
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
 
+  // Confidential gate
+  const [codeInput, setCodeInput] = useState('')
+  const [codeError, setCodeError] = useState('')
+  const [confidentialUnlocked, setConfidentialUnlocked] = useState(false)
+
   const canWrite = profile?.role !== 'viewer'
   const isAdmin = profile?.role === 'super_admin'
+  const isLoggedIn = !!profile
+
+  // If confidential and not admin and not unlocked — show gate
+  const showConfidentialGate = caseData?.is_confidential && !isAdmin && !isLoggedIn && !confidentialUnlocked
+
+  function handleUnlock() {
+    if (codeInput === CONFIDENTIAL_CODE) {
+      setConfidentialUnlocked(true)
+      setCodeError('')
+    } else {
+      setCodeError('Invalid code. Please try again.')
+    }
+  }
 
   async function handleStatusUpdate() {
     if (!caseData || !profile || !newStatus) return
@@ -82,9 +103,9 @@ export default function CaseDetailPage() {
   async function handleDelete() {
     if (!caseData) return
     setDeleting(true)
-    const params = new URLSearchParams()
-    params.set('id', `eq.${caseData.id}`)
-    const { error } = await dbDelete('cases', params)
+    const p = new URLSearchParams()
+    p.set('id', `eq.${caseData.id}`)
+    const { error } = await dbDelete('cases', p)
     setDeleting(false)
     if (!error) {
       setDeleteDialog(false)
@@ -95,10 +116,6 @@ export default function CaseDetailPage() {
   async function getDownloadUrl(path: string) {
     const { data } = await storageSignedUrl('case-attachments', path, 60)
     if (data?.signedUrl) window.open(data.signedUrl, '_blank')
-  }
-
-  function handlePrint() {
-    window.print()
   }
 
   if (loading) {
@@ -124,6 +141,49 @@ export default function CaseDetailPage() {
     )
   }
 
+  // Confidential Gate Screen
+  if (showConfidentialGate) {
+    return (
+      <Layout>
+        <div className="max-w-md mx-auto mt-20">
+          <Card>
+            <CardContent className="p-8 text-center space-y-4">
+              <div className="h-16 w-16 rounded-full bg-amber-100 flex items-center justify-center mx-auto">
+                <Lock className="h-8 w-8 text-amber-600" />
+              </div>
+              <div>
+                <h2 className="text-lg font-bold">Confidential Case / Lihim na Kaso</h2>
+                <p className="text-sm text-muted-foreground mt-1">
+                  This case is marked confidential. Enter the access code to view.
+                </p>
+              </div>
+              <div className="space-y-2 text-left">
+                <Label>Access Code / Code ng Pahintulot</Label>
+                <Input
+                  type="password"
+                  placeholder="Enter code..."
+                  value={codeInput}
+                  onChange={e => setCodeInput(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && handleUnlock()}
+                  autoFocus
+                />
+                {codeError && <p className="text-xs text-destructive">{codeError}</p>}
+              </div>
+              <div className="flex gap-2">
+                <Button variant="outline" className="flex-1" onClick={() => setLocation('/cases')}>
+                  Back
+                </Button>
+                <Button className="flex-1" onClick={handleUnlock}>
+                  Unlock / Buksan
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </Layout>
+    )
+  }
+
   const victim = victims[0]
   const respondent = respondents[0]
 
@@ -134,12 +194,12 @@ export default function CaseDetailPage() {
           .no-print { display: none !important; }
           .print-only { display: block !important; }
           body { font-size: 12px; }
-          .card { box-shadow: none !important; border: 1px solid #ccc !important; }
         }
         .print-only { display: none; }
       `}</style>
 
       <div className="max-w-4xl mx-auto space-y-6">
+
         {/* Print Header */}
         <div className="print-only text-center border-b-2 border-gray-800 pb-4 mb-6">
           <p className="text-sm">Republic of the Philippines | Province of Bataan</p>
@@ -174,7 +234,7 @@ export default function CaseDetailPage() {
                 </Button>
               </>
             )}
-            <Button variant="outline" size="sm" onClick={handlePrint}>
+            <Button variant="outline" size="sm" onClick={() => window.print()}>
               <Printer className="h-4 w-4 mr-1" /> Print
             </Button>
             {isAdmin && (
@@ -412,6 +472,7 @@ export default function CaseDetailPage() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
       </div>
     </Layout>
   )
