@@ -1,6 +1,8 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
-import { supabase } from '@/lib/supabase'
 import type { Profile } from '@/types'
+
+const SUPABASE_URL = 'https://inovdbudrzicbgkcnbpd.supabase.co'
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imlub3ZkYnVkcnppY2Jna2NuYnBkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEyNDY1NzEsImV4cCI6MjA5NjgyMjU3MX0.fBJ418qpVpnGusbFPV9_GriTF2OttI7-lCHdLUxZbZU'
 
 interface AuthContextType {
   profile: Profile | null
@@ -11,14 +13,19 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | null>(null)
 
-async function getProfile(userId: string): Promise<Profile | null> {
+async function getProfile(userId: string, accessToken: string): Promise<Profile | null> {
   try {
-    const { data } = await supabase
-      .from('profiles')
-      .select('id, full_name, role, office_id, is_active, created_at, updated_at')
-      .eq('id', userId)
-      .maybeSingle()
-    return (data as Profile) ?? null
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/profiles?id=eq.${userId}&select=id,full_name,role,office_id,is_active,created_at,updated_at&limit=1`,
+      {
+        headers: {
+          'apikey': SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${accessToken}`,
+        },
+      }
+    )
+    const data = await res.json()
+    return Array.isArray(data) && data.length > 0 ? data[0] as Profile : null
   } catch {
     return null
   }
@@ -32,16 +39,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     async function loadSession() {
       try {
         const raw = localStorage.getItem('sb-session')
-        if (!raw) {
-          setLoading(false)
-          return
-        }
+        if (!raw) { setLoading(false); return }
         const session = JSON.parse(raw)
-        if (!session?.user?.id) {
-          setLoading(false)
-          return
-        }
-        const p = await getProfile(session.user.id)
+        if (!session?.user?.id || !session?.access_token) { setLoading(false); return }
+        const p = await getProfile(session.user.id, session.access_token)
         setProfile(p)
       } catch {
         // ignore
@@ -54,11 +55,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function signIn(email: string, password: string) {
     try {
-      const res = await fetch('https://inovdbudrzicbgkcnbpd.supabase.co/auth/v1/token?grant_type=password', {
+      const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imlub3ZkYnVkcnppY2Jna2NuYnBkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEyNDY1NzEsImV4cCI6MjA5NjgyMjU3MX0.fBJ418qpVpnGusbFPV9_GriTF2OttI7-lCHdLUxZbZU',
+          'apikey': SUPABASE_ANON_KEY,
         },
         body: JSON.stringify({ email, password }),
       })
@@ -69,7 +70,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         refresh_token: data.refresh_token,
         user: data.user,
       }))
-      const p = await getProfile(data.user.id)
+      const p = await getProfile(data.user.id, data.access_token)
       setProfile(p)
       return { error: null }
     } catch {
