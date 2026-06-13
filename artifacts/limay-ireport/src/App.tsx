@@ -19,30 +19,24 @@ const queryClient = new QueryClient()
 function Router() {
   return (
     <Switch>
+      {/* Public — login page */}
       <Route path="/login" component={LoginPage} />
+
+      {/* Root → dashboard */}
       <Route path="/">
         <Redirect to="/dashboard" />
       </Route>
-      <Route path="/dashboard">
-        <ProtectedRoute>
-          <DashboardPage />
-        </ProtectedRoute>
-      </Route>
+
+      {/* PUBLIC — no login required */}
+      <Route path="/dashboard" component={DashboardPage} />
+      <Route path="/cases" component={CasesPage} />
+      <Route path="/cases/:id" component={CaseDetailPage} />
+      <Route path="/reports" component={ReportsPage} />
+
+      {/* PROTECTED — encoder + super_admin only */}
       <Route path="/cases/new">
         <ProtectedRoute requiredRole="encoder">
           <NewCasePage />
-        </ProtectedRoute>
-      </Route>
-      <Route path="/cases/:id">
-        {() => (
-          <ProtectedRoute>
-            <CaseDetailPage />
-          </ProtectedRoute>
-        )}
-      </Route>
-      <Route path="/cases">
-        <ProtectedRoute>
-          <CasesPage />
         </ProtectedRoute>
       </Route>
       <Route path="/referrals">
@@ -50,16 +44,14 @@ function Router() {
           <ReferralsPage />
         </ProtectedRoute>
       </Route>
-      <Route path="/reports">
-        <ProtectedRoute>
-          <ReportsPage />
-        </ProtectedRoute>
-      </Route>
+
+      {/* PROTECTED — super_admin only */}
       <Route path="/admin">
         <ProtectedRoute requiredRole="super_admin">
           <AdminPage />
         </ProtectedRoute>
       </Route>
+
       <Route component={NotFound} />
     </Switch>
   )

@@ -15,7 +15,7 @@ async function getProfile(userId: string): Promise<Profile | null> {
   try {
     const { data } = await supabase
       .from('profiles')
-      .select('id, full_name, role, office_id, is_active, created_at, updated_at')
+      .select('*, office:offices(*)')
       .eq('id', userId)
       .maybeSingle()
     return (data as Profile) ?? null

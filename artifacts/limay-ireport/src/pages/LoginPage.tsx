@@ -15,17 +15,10 @@ export default function LoginPage() {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-[hsl(218,64%,22%)]">
-        <div className="h-8 w-8 rounded-full border-4 border-white/30 border-t-white animate-spin" />
-      </div>
-    )
-  }
+  // Already logged in → go to dashboard (don't wait for loading; if profile exists we know)
+  if (profile) return <Redirect to="/dashboard" />
 
-  if (profile) {
-    return <Redirect to="/dashboard" />
-  }
+  // Note: no spinner while loading=true — show the form immediately
 
   async function handleLogin() {
     if (!email || !password) {
@@ -36,14 +29,34 @@ export default function LoginPage() {
     setSubmitting(true)
     const { error: err } = await signIn(email, password)
     if (err) {
-      setError(err)
+      const msg = err.toLowerCase()
+      if (msg.includes('invalid') || msg.includes('credentials') || msg.includes('password')) {
+        setError('Invalid email or password. Please try again.')
+      } else if (msg.includes('email not confirmed')) {
+        setError('Please verify your email address before signing in.')
+      } else if (msg.includes('timed out')) {
+        setError(err)
+      } else {
+        setError('Sign in failed. Please try again.')
+      }
       setSubmitting(false)
     }
+    // On success: signIn sets profile → <Redirect to="/dashboard" /> fires
   }
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-[hsl(218,64%,22%)] px-4">
+      {/* Background dot pattern */}
+      <div
+        className="absolute inset-0 opacity-5 pointer-events-none"
+        style={{
+          backgroundImage: 'radial-gradient(circle at 25px 25px, white 2px, transparent 0)',
+          backgroundSize: '50px 50px',
+        }}
+      />
+
       <div className="relative w-full max-w-md">
+        {/* Branding */}
         <div className="flex flex-col items-center mb-8">
           <div className="h-20 w-20 rounded-full bg-[hsl(38,90%,55%)] flex items-center justify-center mb-4 shadow-lg">
             <Shield className="h-10 w-10 text-white" />
@@ -55,12 +68,14 @@ export default function LoginPage() {
             "Isang Click, Isang Aksyon — Para sa Kaligtasan ng Bawat Limayeño"
           </p>
         </div>
+
         <Card className="shadow-2xl border-0">
           <CardContent className="p-6 md:p-8">
             <div className="mb-6">
               <h2 className="text-lg font-semibold text-foreground">Sign In</h2>
               <p className="text-sm text-muted-foreground">Enter your credentials to access the system</p>
             </div>
+
             <div className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="email">Email Address</Label>
@@ -73,8 +88,11 @@ export default function LoginPage() {
                   onKeyDown={e => e.key === 'Enter' && handleLogin()}
                   autoComplete="email"
                   autoFocus
+                  disabled={submitting}
+                  data-testid="input-email"
                 />
               </div>
+
               <div className="space-y-2">
                 <Label htmlFor="password">Password</Label>
                 <div className="relative">
@@ -86,6 +104,8 @@ export default function LoginPage() {
                     onChange={e => setPassword(e.target.value)}
                     onKeyDown={e => e.key === 'Enter' && handleLogin()}
                     autoComplete="current-password"
+                    disabled={submitting}
+                    data-testid="input-password"
                     className="pr-10"
                   />
                   <button
@@ -98,16 +118,27 @@ export default function LoginPage() {
                   </button>
                 </div>
               </div>
+
               {error && (
-                <div className="text-sm text-destructive bg-destructive/10 border border-destructive/20 rounded-md px-3 py-2" role="alert">
+                <div
+                  className="text-sm text-destructive bg-destructive/10 border border-destructive/20 rounded-md px-3 py-2"
+                  role="alert"
+                  data-testid="text-error"
+                >
                   {error}
                 </div>
               )}
+
+              {loading && !submitting && (
+                <p className="text-xs text-muted-foreground text-center">Checking session…</p>
+              )}
+
               <Button
                 type="button"
                 className="w-full"
                 disabled={submitting}
                 onClick={handleLogin}
+                data-testid="button-submit"
               >
                 {submitting ? (
                   <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Signing in...</>
@@ -116,6 +147,7 @@ export default function LoginPage() {
             </div>
           </CardContent>
         </Card>
+
         <p className="text-center text-xs text-white/40 mt-6">
           Republic of the Philippines &bull; Province of Bataan<br />
           Municipality of Limay &bull; Official Government System

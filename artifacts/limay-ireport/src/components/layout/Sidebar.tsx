@@ -1,32 +1,36 @@
 import { Link, useLocation } from 'wouter'
-import { LayoutDashboard, FolderOpen, ArrowLeftRight, BarChart3, Settings, Shield } from 'lucide-react'
+import { LayoutDashboard, FolderOpen, ArrowLeftRight, BarChart3, Settings, Shield, LogIn } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
+import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
 interface NavItem {
   href: string
   label: string
   icon: typeof LayoutDashboard
+  /** If set, only show to logged-in users with one of these roles */
   roles?: ('super_admin' | 'encoder' | 'viewer')[]
+  /** If true, requires any authenticated user */
+  requiresAuth?: boolean
 }
 
 const navItems: NavItem[] = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/cases', label: 'Cases / Kaso', icon: FolderOpen },
-  // Referrals: encoder + super_admin only
   { href: '/referrals', label: 'Referrals', icon: ArrowLeftRight, roles: ['super_admin', 'encoder'] },
-  // Reports: viewer + super_admin (viewer's main output); encoder can skip but we allow it
-  { href: '/reports', label: 'Reports', icon: BarChart3, roles: ['super_admin', 'viewer'] },
+  { href: '/reports', label: 'Reports', icon: BarChart3 },
 ]
 
 export function Sidebar({ onClose }: { onClose?: () => void }) {
   const [location] = useLocation()
   const { profile } = useAuth()
-  const role = profile?.role ?? 'viewer'
+  const role = profile?.role
 
-  const visibleItems = navItems.filter(item =>
-    !item.roles || item.roles.includes(role as 'super_admin' | 'encoder' | 'viewer')
-  )
+  const visibleItems = navItems.filter(item => {
+    if (!item.roles) return true           // public item — always visible
+    if (!profile) return false             // role-restricted, not logged in
+    return item.roles.includes(role as 'super_admin' | 'encoder' | 'viewer')
+  })
 
   function isActive(href: string) {
     if (href === '/dashboard') return location === '/dashboard' || location === '/'
@@ -48,7 +52,7 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
         </div>
       </div>
 
-      {/* Office badge */}
+      {/* Office badge — logged-in users only */}
       {profile?.office && (
         <div className="mx-3 mt-3 px-3 py-2 bg-sidebar-accent rounded-md">
           <p className="text-xs text-sidebar-accent-foreground/70 uppercase tracking-wide">Office</p>
@@ -98,12 +102,27 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
         )}
       </nav>
 
-      {/* Role + user info */}
-      <div className="px-4 py-3 border-t border-sidebar-border space-y-0.5">
-        <p className="text-xs text-sidebar-foreground/70 font-medium truncate">{profile?.full_name}</p>
-        <p className="text-xs text-sidebar-foreground/50 capitalize">
-          {role === 'super_admin' ? '⭐ Super Admin' : role === 'encoder' ? '✏️ Encoder' : '👁 Viewer'}
-        </p>
+      {/* Bottom: Login button OR user info */}
+      <div className="px-3 py-3 border-t border-sidebar-border">
+        {profile ? (
+          <div className="px-1 space-y-0.5">
+            <p className="text-xs text-sidebar-foreground/70 font-medium truncate">{profile.full_name}</p>
+            <p className="text-xs text-sidebar-foreground/50">
+              {role === 'super_admin' ? '⭐ Super Admin' : role === 'encoder' ? '✏️ Encoder' : '👁 Viewer'}
+            </p>
+          </div>
+        ) : (
+          <Link href="/login" onClick={onClose}>
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full gap-2 border-sidebar-border text-sidebar-foreground hover:bg-sidebar-accent"
+            >
+              <LogIn className="h-4 w-4" />
+              Login
+            </Button>
+          </Link>
+        )}
       </div>
     </div>
   )
