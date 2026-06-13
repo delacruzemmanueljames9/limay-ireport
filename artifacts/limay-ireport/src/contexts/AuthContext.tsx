@@ -29,22 +29,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const timer = setTimeout(() => setLoading(false), 4000)
+    let done = false
+
+    const finish = (p: Profile | null) => {
+      if (done) return
+      done = true
+      setProfile(p)
+      setLoading(false)
+    }
+
+    const timeout = setTimeout(() => finish(null), 5000)
+
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (!session?.user) return finish(null)
+      const p = await getProfile(session.user.id)
+      clearTimeout(timeout)
+      finish(p)
+    }).catch(() => finish(null))
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        clearTimeout(timer)
-        if (event === 'SIGNED_OUT' || !session?.user) {
-          setProfile(null)
-          setLoading(false)
+        if (event === 'SIGNED_OUT') {
+          finish(null)
           return
         }
-        const p = await getProfile(session.user.id)
-        setProfile(p)
-        setLoading(false)
+        if (session?.user) {
+          const p = await getProfile(session.user.id)
+          clearTimeout(timeout)
+          finish(p)
+        }
       }
     )
+
     return () => {
-      clearTimeout(timer)
+      clearTimeout(timeout)
       subscription.unsubscribe()
     }
   }, [])
@@ -52,12 +70,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   async function signIn(email: string, password: string) {
     try {
       const timeoutPromise = new Promise<{ data: null; error: Error }>(resolve =>
-        setTimeout(() => resolve({ data: null, error: new Error('Request timed out. Please try again.') }), 10000)
+        setTimeout(() => resolve({ data: null, error: new Error('Connection timed out. Please try again.') }), 15000)
       )
       const authPromise = supabase.auth.signInWithPassword({ email, password })
-      const result = await Promise.race([authPromise, timeoutPromise])
+      const result = await Promise.race([authPromise, timeoutPromise]) as Awaited<ReturnType<typeof supabase.auth.signInWithPassword>>
       if (result.error) return { error: result.error.message }
-      if (result.data && 'user' in result.data && result.data.user) {
+      if (result.data?.user) {
         const p = await getProfile(result.data.user.id)
         setProfile(p)
       }
