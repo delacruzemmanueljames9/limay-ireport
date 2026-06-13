@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useParams, useLocation } from 'wouter'
-import { storageSignedUrl } from '@/lib/api'
+import { storageSignedUrl, dbDelete } from '@/lib/api'
 import { useAuth } from '@/contexts/AuthContext'
 import { useCase, updateCaseStatus, createReferralForCase } from '@/hooks/useCases'
 import { useOffices } from '@/hooks/useOffices'
@@ -12,7 +12,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Printer, ArrowLeftRight, ChevronLeft, Download, Clock, FileText, User, Users } from 'lucide-react'
+import { Printer, ArrowLeftRight, ChevronLeft, Download, Clock, FileText, User, Users, Trash2 } from 'lucide-react'
 import { CASE_TYPE_LABELS, CASE_STATUS_LABELS, PRIORITY_LABELS } from '@/types'
 import type { CaseStatus, PriorityLevel } from '@/types'
 
@@ -50,13 +50,16 @@ export default function CaseDetailPage() {
 
   const [statusDialog, setStatusDialog] = useState(false)
   const [referralDialog, setReferralDialog] = useState(false)
+  const [deleteDialog, setDeleteDialog] = useState(false)
   const [newStatus, setNewStatus] = useState('')
   const [statusNotes, setStatusNotes] = useState('')
   const [referralOfficeId, setReferralOfficeId] = useState('')
   const [referralReason, setReferralReason] = useState('')
   const [saving, setSaving] = useState(false)
+  const [deleting, setDeleting] = useState(false)
 
   const canWrite = profile?.role !== 'viewer'
+  const isAdmin = profile?.role === 'super_admin'
 
   async function handleStatusUpdate() {
     if (!caseData || !profile || !newStatus) return
@@ -76,9 +79,26 @@ export default function CaseDetailPage() {
     if (!error) { setReferralDialog(false); reload() }
   }
 
+  async function handleDelete() {
+    if (!caseData) return
+    setDeleting(true)
+    const params = new URLSearchParams()
+    params.set('id', `eq.${caseData.id}`)
+    const { error } = await dbDelete('cases', params)
+    setDeleting(false)
+    if (!error) {
+      setDeleteDialog(false)
+      setLocation('/cases')
+    }
+  }
+
   async function getDownloadUrl(path: string) {
     const { data } = await storageSignedUrl('case-attachments', path, 60)
     if (data?.signedUrl) window.open(data.signedUrl, '_blank')
+  }
+
+  function handlePrint() {
+    window.print()
   }
 
   if (loading) {
@@ -109,21 +129,33 @@ export default function CaseDetailPage() {
 
   return (
     <Layout>
+      <style>{`
+        @media print {
+          .no-print { display: none !important; }
+          .print-only { display: block !important; }
+          body { font-size: 12px; }
+          .card { box-shadow: none !important; border: 1px solid #ccc !important; }
+        }
+        .print-only { display: none; }
+      `}</style>
+
       <div className="max-w-4xl mx-auto space-y-6">
-        <div className="print-only hidden text-center border-b-2 border-gray-800 pb-4 mb-6">
+        {/* Print Header */}
+        <div className="print-only text-center border-b-2 border-gray-800 pb-4 mb-6">
           <p className="text-sm">Republic of the Philippines | Province of Bataan</p>
           <p className="text-xl font-bold">MUNICIPALITY OF LIMAY</p>
-          <p className="text-sm">Municipal Hall, Limay, Bataan | Tel. No.: (047) XXX-XXXX</p>
+          <p className="text-sm">Municipal Hall, Limay, Bataan</p>
           <div className="mt-3">
-            <p className="text-base font-bold">LIMAY iREPORT SYSTEM</p>
-            <p className="text-sm font-medium">Case Record</p>
+            <p className="text-base font-bold">LIMAY iREPORT SYSTEM — Case Report</p>
             <p className="text-sm">Case No: {caseData.case_number ?? '—'}</p>
+            <p className="text-xs text-gray-500">Printed: {new Date().toLocaleString('en-PH')}</p>
           </div>
         </div>
 
+        {/* Page Header */}
         <div className="flex items-start justify-between flex-wrap gap-3 no-print">
           <div className="flex items-center gap-3">
-            <Button variant="ghost" size="sm" onClick={() => setLocation('/cases')} data-testid="button-back">
+            <Button variant="ghost" size="sm" onClick={() => setLocation('/cases')}>
               <ChevronLeft className="h-4 w-4 mr-1" /> Cases
             </Button>
             <div>
@@ -134,20 +166,26 @@ export default function CaseDetailPage() {
           <div className="flex items-center gap-2 flex-wrap">
             {canWrite && (
               <>
-                <Button variant="outline" size="sm" onClick={() => { setNewStatus(caseData.status); setStatusDialog(true) }} data-testid="button-update-status">
+                <Button variant="outline" size="sm" onClick={() => { setNewStatus(caseData.status); setStatusDialog(true) }}>
                   <Clock className="h-4 w-4 mr-1" /> Update Status
                 </Button>
-                <Button variant="outline" size="sm" onClick={() => setReferralDialog(true)} data-testid="button-refer">
+                <Button variant="outline" size="sm" onClick={() => setReferralDialog(true)}>
                   <ArrowLeftRight className="h-4 w-4 mr-1" /> Refer to Office
                 </Button>
               </>
             )}
-            <Button variant="outline" size="sm" onClick={() => window.print()} data-testid="button-print">
+            <Button variant="outline" size="sm" onClick={handlePrint}>
               <Printer className="h-4 w-4 mr-1" /> Print
             </Button>
+            {isAdmin && (
+              <Button variant="destructive" size="sm" onClick={() => setDeleteDialog(true)}>
+                <Trash2 className="h-4 w-4 mr-1" /> Delete
+              </Button>
+            )}
           </div>
         </div>
 
+        {/* Case Info */}
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-semibold flex items-center gap-2">
@@ -185,6 +223,7 @@ export default function CaseDetailPage() {
           </CardContent>
         </Card>
 
+        {/* Victim */}
         {victim && (
           <Card>
             <CardHeader className="pb-3">
@@ -207,6 +246,7 @@ export default function CaseDetailPage() {
           </Card>
         )}
 
+        {/* Respondent */}
         {respondent && (
           <Card>
             <CardHeader className="pb-3">
@@ -231,6 +271,7 @@ export default function CaseDetailPage() {
           </Card>
         )}
 
+        {/* Narrative */}
         {narratives.length > 0 && (
           <Card>
             <CardHeader className="pb-3">
@@ -247,6 +288,7 @@ export default function CaseDetailPage() {
           </Card>
         )}
 
+        {/* Attachments */}
         {attachments.length > 0 && (
           <Card>
             <CardHeader className="pb-3">
@@ -255,9 +297,9 @@ export default function CaseDetailPage() {
             <CardContent>
               <div className="space-y-2">
                 {attachments.map(a => (
-                  <div key={a.id} className="flex items-center justify-between border border-border rounded-md px-3 py-2" data-testid={`attachment-${a.id}`}>
+                  <div key={a.id} className="flex items-center justify-between border border-border rounded-md px-3 py-2">
                     <span className="text-sm truncate">{a.file_name}</span>
-                    <Button size="sm" variant="ghost" onClick={() => getDownloadUrl(a.file_url)} data-testid={`button-download-${a.id}`}>
+                    <Button size="sm" variant="ghost" onClick={() => getDownloadUrl(a.file_url)}>
                       <Download className="h-4 w-4 mr-1" /> Download
                     </Button>
                   </div>
@@ -267,6 +309,7 @@ export default function CaseDetailPage() {
           </Card>
         )}
 
+        {/* Status Logs */}
         {statusLogs.length > 0 && (
           <Card>
             <CardHeader className="pb-3">
@@ -275,7 +318,7 @@ export default function CaseDetailPage() {
             <CardContent>
               <div className="relative space-y-4 pl-6 before:absolute before:left-2 before:top-2 before:bottom-2 before:w-0.5 before:bg-border">
                 {statusLogs.map(log => (
-                  <div key={log.id} className="relative" data-testid={`log-${log.id}`}>
+                  <div key={log.id} className="relative">
                     <div className="absolute -left-4 top-1 h-2.5 w-2.5 rounded-full bg-primary border-2 border-background" />
                     <div>
                       <p className="text-sm font-medium">
@@ -294,6 +337,7 @@ export default function CaseDetailPage() {
           </Card>
         )}
 
+        {/* Status Dialog */}
         <Dialog open={statusDialog} onOpenChange={setStatusDialog}>
           <DialogContent>
             <DialogHeader><DialogTitle>Update Case Status / Baguhin ang Katayuan</DialogTitle></DialogHeader>
@@ -301,7 +345,7 @@ export default function CaseDetailPage() {
               <div className="space-y-1.5">
                 <Label>New Status / Bagong Katayuan</Label>
                 <Select value={newStatus} onValueChange={setNewStatus}>
-                  <SelectTrigger data-testid="select-new-status"><SelectValue /></SelectTrigger>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {Object.entries(CASE_STATUS_LABELS).map(([k, v]) => (
                       <SelectItem key={k} value={k}>{v}</SelectItem>
@@ -311,18 +355,19 @@ export default function CaseDetailPage() {
               </div>
               <div className="space-y-1.5">
                 <Label>Notes / Tala (optional)</Label>
-                <Textarea value={statusNotes} onChange={e => setStatusNotes(e.target.value)} placeholder="Add notes..." data-testid="input-status-notes" />
+                <Textarea value={statusNotes} onChange={e => setStatusNotes(e.target.value)} placeholder="Add notes..." />
               </div>
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setStatusDialog(false)}>Cancel</Button>
-              <Button onClick={handleStatusUpdate} disabled={saving || !newStatus} data-testid="button-confirm-status">
+              <Button onClick={handleStatusUpdate} disabled={saving || !newStatus}>
                 {saving ? 'Saving...' : 'Update Status'}
               </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
 
+        {/* Referral Dialog */}
         <Dialog open={referralDialog} onOpenChange={setReferralDialog}>
           <DialogContent>
             <DialogHeader><DialogTitle>Refer to Office / I-refer sa Opisina</DialogTitle></DialogHeader>
@@ -330,7 +375,7 @@ export default function CaseDetailPage() {
               <div className="space-y-1.5">
                 <Label>Refer to / Opisina</Label>
                 <Select value={referralOfficeId} onValueChange={setReferralOfficeId}>
-                  <SelectTrigger data-testid="select-referral-office"><SelectValue placeholder="Select office..." /></SelectTrigger>
+                  <SelectTrigger><SelectValue placeholder="Select office..." /></SelectTrigger>
                   <SelectContent>
                     {offices.filter(o => o.id !== profile?.office_id).map(o => (
                       <SelectItem key={o.id} value={o.id}>{o.name}</SelectItem>
@@ -340,13 +385,29 @@ export default function CaseDetailPage() {
               </div>
               <div className="space-y-1.5">
                 <Label>Reason / Dahilan</Label>
-                <Textarea value={referralReason} onChange={e => setReferralReason(e.target.value)} placeholder="Reason for referral..." data-testid="input-referral-reason" />
+                <Textarea value={referralReason} onChange={e => setReferralReason(e.target.value)} placeholder="Reason for referral..." />
               </div>
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setReferralDialog(false)}>Cancel</Button>
-              <Button onClick={handleReferral} disabled={saving || !referralOfficeId} data-testid="button-confirm-referral">
+              <Button onClick={handleReferral} disabled={saving || !referralOfficeId}>
                 {saving ? 'Sending...' : 'Send Referral'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Delete Dialog */}
+        <Dialog open={deleteDialog} onOpenChange={setDeleteDialog}>
+          <DialogContent>
+            <DialogHeader><DialogTitle>Delete Case / Burahin ang Kaso</DialogTitle></DialogHeader>
+            <p className="text-sm text-muted-foreground">
+              Are you sure you want to delete case <strong>{caseData.case_number}</strong>? This action cannot be undone.
+            </p>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setDeleteDialog(false)}>Cancel</Button>
+              <Button variant="destructive" onClick={handleDelete} disabled={deleting}>
+                {deleting ? 'Deleting...' : 'Delete Case'}
               </Button>
             </DialogFooter>
           </DialogContent>
