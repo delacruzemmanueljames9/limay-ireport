@@ -32,11 +32,7 @@ function Router() {
         </ProtectedRoute>
       </Route>
       <Route path="/cases/:id">
-        {() => (
-          <ProtectedRoute>
-            <CaseDetailPage />
-          </ProtectedRoute>
-        )}
+        {() => <CaseDetailPage />}
       </Route>
       <Route path="/cases">
         <CasesPage />
