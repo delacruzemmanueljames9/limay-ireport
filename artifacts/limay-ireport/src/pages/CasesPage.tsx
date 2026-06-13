@@ -1,12 +1,10 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useLocation, Link } from 'wouter'
 import { Plus, ChevronLeft, ChevronRight } from 'lucide-react'
-import { supabase } from '@/lib/supabase'
+import { dbGet } from '@/lib/api'
 import { useAuth } from '@/contexts/AuthContext'
 import { Layout } from '@/components/layout/Layout'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -45,33 +43,35 @@ export default function CasesPage() {
   const [filterStatus, setFilterStatus] = useState<string>('all')
   const [filterPriority, setFilterPriority] = useState<string>('all')
   const [pulse, setPulse] = useState(false)
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
-    let query = supabase
-      .from('cases')
-      .select('*, filed_by_office:offices!cases_filed_by_office_id_fkey(name)', { count: 'exact' })
-      .order('created_at', { ascending: false })
 
-    if (filterType !== 'all') query = query.eq('case_type', filterType)
-    if (filterStatus !== 'all') query = query.eq('status', filterStatus)
-    if (filterPriority !== 'all') query = query.eq('priority_level', filterPriority)
+    const params = new URLSearchParams()
+    params.set('select', '*,filed_by_office:offices!cases_filed_by_office_id_fkey(name)')
+    params.set('order', 'created_at.desc')
+    params.set('offset', String((page - 1) * PAGE_SIZE))
+    params.set('limit', String(PAGE_SIZE))
+    if (filterType !== 'all') params.set('case_type', `eq.${filterType}`)
+    if (filterStatus !== 'all') params.set('status', `eq.${filterStatus}`)
+    if (filterPriority !== 'all') params.set('priority_level', `eq.${filterPriority}`)
 
-    const from = (page - 1) * PAGE_SIZE
-    query = query.range(from, from + PAGE_SIZE - 1)
-
-    const { data, error, count } = await query
+    const { data, count, error } = await dbGet<Case[]>('cases', params, true)
     if (!error && data) {
-      const caseList = data as Case[]
+      const caseList = data
       const caseIds = caseList.map(c => c.id)
-      const { data: victims } = caseIds.length
-        ? await supabase.from('victims').select('case_id, last_name, first_name').in('case_id', caseIds)
-        : { data: [] }
 
-      const victimMap: Record<string, string> = {}
-      ;(victims ?? []).forEach((v: Pick<Victim, 'case_id' | 'last_name' | 'first_name'>) => {
-        if (!victimMap[v.case_id]) victimMap[v.case_id] = `${v.last_name}, ${v.first_name}`
-      })
+      let victimMap: Record<string, string> = {}
+      if (caseIds.length > 0) {
+        const vParams = new URLSearchParams()
+        vParams.set('select', 'case_id,last_name,first_name')
+        vParams.set('case_id', `in.(${caseIds.join(',')})`)
+        const { data: victims } = await dbGet<Pick<Victim, 'case_id' | 'last_name' | 'first_name'>[]>('victims', vParams)
+        ;(victims ?? []).forEach(v => {
+          if (!victimMap[v.case_id]) victimMap[v.case_id] = `${v.last_name}, ${v.first_name}`
+        })
+      }
 
       setCases(caseList.map(c => ({ ...c, victim_name: victimMap[c.id] })))
       setTotal(count ?? 0)
@@ -82,16 +82,15 @@ export default function CasesPage() {
   useEffect(() => {
     load()
 
-    const channel = supabase
-      .channel('cases-list-realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'cases' }, () => {
-        setPulse(true)
-        load()
-        setTimeout(() => setPulse(false), 1200)
-      })
-      .subscribe()
+    intervalRef.current = setInterval(() => {
+      setPulse(true)
+      load()
+      setTimeout(() => setPulse(false), 1200)
+    }, 30_000)
 
-    return () => { supabase.removeChannel(channel) }
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current)
+    }
   }, [load])
 
   const totalPages = Math.ceil(total / PAGE_SIZE)
@@ -120,7 +119,6 @@ export default function CasesPage() {
           )}
         </div>
 
-        {/* Filters */}
         <Card>
           <CardContent className="p-4">
             <div className="flex flex-wrap gap-3">
@@ -157,7 +155,6 @@ export default function CasesPage() {
           </CardContent>
         </Card>
 
-        {/* Table */}
         <Card>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -198,7 +195,7 @@ export default function CasesPage() {
                       <td className="px-4 py-3 font-mono text-xs font-medium text-primary">
                         {c.case_number ?? '—'}
                       </td>
-                      <td className="px-4 py-3">{CASE_TYPE_LABELS[c.case_type]}</td>
+                      <td className="px-4 py-3">{CASE_TYPE_LABELS[c.case_type as CaseType]}</td>
                       <td className="px-4 py-3">{c.victim_name ?? <span className="text-muted-foreground italic">Unknown</span>}</td>
                       <td className="px-4 py-3">
                         <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium border ${STATUS_BADGE[c.status]}`}>
@@ -223,7 +220,6 @@ export default function CasesPage() {
             </table>
           </div>
 
-          {/* Pagination */}
           {totalPages > 1 && (
             <div className="flex items-center justify-between px-4 py-3 border-t border-border">
               <p className="text-xs text-muted-foreground">

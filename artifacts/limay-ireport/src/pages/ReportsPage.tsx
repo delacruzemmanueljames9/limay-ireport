@@ -1,12 +1,12 @@
 import { useState, useRef } from 'react'
-import { supabase } from '@/lib/supabase'
+import { dbGet } from '@/lib/api'
 import { Layout } from '@/components/layout/Layout'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Printer, Download, FileText } from 'lucide-react'
+import { Printer, FileText } from 'lucide-react'
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts'
 import { CASE_TYPE_LABELS, CASE_STATUS_LABELS } from '@/types'
 import type { CaseType, CaseStatus } from '@/types'
@@ -33,18 +33,16 @@ export default function ReportsPage() {
 
   async function generateReport() {
     setLoading(true)
-    let query = supabase
-      .from('cases')
-      .select('case_type, status')
-      .gte('date_filed', startDate)
-      .lte('date_filed', endDate)
+    const params = new URLSearchParams()
+    params.set('select', 'case_type,status')
+    params.set('date_filed', `gte.${startDate}`)
+    params.set('date_filed', `lte.${endDate}`)
+    if (filterType !== 'all') params.set('case_type', `eq.${filterType}`)
+    if (filterStatus !== 'all') params.set('status', `eq.${filterStatus}`)
 
-    if (filterType !== 'all') query = query.eq('case_type', filterType)
-    if (filterStatus !== 'all') query = query.eq('status', filterStatus)
-
-    const { data } = await query
+    const { data } = await dbGet<{ case_type: CaseType; status: CaseStatus }[]>('cases', params)
     const counts: Record<string, ReportRow> = {}
-    ;(data ?? []).forEach((c: { case_type: CaseType; status: CaseStatus }) => {
+    ;(data ?? []).forEach(c => {
       const key = `${c.case_type}_${c.status}`
       if (!counts[key]) counts[key] = { case_type: c.case_type, status: c.status, count: 0 }
       counts[key].count++
@@ -65,8 +63,6 @@ export default function ReportsPage() {
 
   const total = rows.reduce((s, r) => s + r.count, 0)
 
-  function handlePrint() { window.print() }
-
   return (
     <Layout>
       <div className="space-y-6">
@@ -75,7 +71,6 @@ export default function ReportsPage() {
           <p className="text-sm text-muted-foreground">Generate summary reports for cases</p>
         </div>
 
-        {/* Filters */}
         <Card>
           <CardHeader><CardTitle className="text-base">Report Parameters</CardTitle></CardHeader>
           <CardContent className="space-y-4">
@@ -114,7 +109,7 @@ export default function ReportsPage() {
                 <FileText className="h-4 w-4 mr-2" /> {loading ? 'Generating...' : 'Generate Report'}
               </Button>
               {generated && (
-                <Button variant="outline" onClick={handlePrint} data-testid="button-print-report">
+                <Button variant="outline" onClick={() => window.print()} data-testid="button-print-report">
                   <Printer className="h-4 w-4 mr-2" /> Print
                 </Button>
               )}
@@ -124,7 +119,6 @@ export default function ReportsPage() {
 
         {generated && (
           <div ref={reportRef} className="space-y-6">
-            {/* Print letterhead (hidden on screen, shown when printing) */}
             <div className="print-only hidden text-center border-b-2 border-gray-800 pb-4 mb-4">
               <p className="text-sm">Republic of the Philippines</p>
               <p className="text-sm">Province of Bataan</p>
@@ -137,7 +131,6 @@ export default function ReportsPage() {
               </div>
             </div>
 
-            {/* Summary */}
             <Card>
               <CardHeader>
                 <CardTitle className="text-base">
@@ -172,7 +165,6 @@ export default function ReportsPage() {
               </CardContent>
             </Card>
 
-            {/* Chart */}
             {chartData.length > 0 && (
               <Card className="no-print">
                 <CardHeader><CardTitle className="text-base">Visual Breakdown</CardTitle></CardHeader>

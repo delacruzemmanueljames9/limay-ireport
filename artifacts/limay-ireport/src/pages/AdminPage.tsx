@@ -1,14 +1,12 @@
 import { useState, useEffect } from 'react'
-import { supabase } from '@/lib/supabase'
-import { useAuth } from '@/contexts/AuthContext'
+import { dbGet, dbInsert, dbUpdate } from '@/lib/api'
 import { useOffices } from '@/hooks/useOffices'
 import { Layout } from '@/components/layout/Layout'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Switch } from '@/components/ui/switch'
@@ -30,8 +28,9 @@ function UserManagement() {
   const [saving, setSaving] = useState(false)
 
   async function loadUsers() {
-    const { data } = await supabase.from('profiles').select('*, office:offices(*)').order('full_name')
-    setUsers((data ?? []) as ProfileWithEmail[])
+    const params = new URLSearchParams({ select: '*,office:offices(*)', order: 'full_name.asc' })
+    const { data } = await dbGet<ProfileWithEmail[]>('profiles', params)
+    setUsers(data ?? [])
     setLoading(false)
   }
 
@@ -40,12 +39,16 @@ function UserManagement() {
   async function handleSave() {
     if (!editUser) return
     setSaving(true)
-    await supabase.from('profiles').update({
-      full_name: form.full_name,
-      role: form.role,
-      office_id: form.office_id || null,
-      is_active: form.is_active,
-    }).eq('id', editUser.id)
+    await dbUpdate(
+      'profiles',
+      new URLSearchParams({ id: `eq.${editUser.id}` }),
+      {
+        full_name: form.full_name,
+        role: form.role,
+        office_id: form.office_id || null,
+        is_active: form.is_active,
+      }
+    )
     setSaving(false)
     setDialogOpen(false)
     loadUsers()
@@ -161,9 +164,13 @@ function OfficeManagement() {
   async function handleSave() {
     setSaving(true)
     if (editOffice) {
-      await supabase.from('offices').update(form).eq('id', editOffice.id)
+      await dbUpdate(
+        'offices',
+        new URLSearchParams({ id: `eq.${editOffice.id}` }),
+        form as Record<string, unknown>
+      )
     } else {
-      await supabase.from('offices').insert(form)
+      await dbInsert('offices', form as Record<string, unknown>)
     }
     setSaving(false)
     setDialogOpen(false)
@@ -250,8 +257,9 @@ function SystemLogs() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    supabase.from('case_status_logs').select('*').order('created_at', { ascending: false }).limit(100).then(({ data }) => {
-      setLogs((data ?? []) as typeof logs)
+    const params = new URLSearchParams({ select: '*', order: 'created_at.desc', limit: '100' })
+    dbGet<typeof logs>('case_status_logs', params).then(({ data }) => {
+      setLogs(data ?? [])
       setLoading(false)
     })
   }, [])

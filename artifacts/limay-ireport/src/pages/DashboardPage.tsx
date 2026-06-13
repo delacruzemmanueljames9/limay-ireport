@@ -1,14 +1,13 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useLocation } from 'wouter'
 import { FolderOpen, Clock, CheckCircle, ArrowLeftRight, AlertTriangle, TrendingUp, Settings } from 'lucide-react'
-import { supabase } from '@/lib/supabase'
+import { dbGet } from '@/lib/api'
 import { useAuth } from '@/contexts/AuthContext'
 import { Layout } from '@/components/layout/Layout'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
 import {
   ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
-  PieChart, Pie, Cell, BarChart, Bar, Legend,
+  PieChart, Pie, Cell,
 } from 'recharts'
 import { CASE_TYPE_LABELS, CASE_STATUS_LABELS } from '@/types'
 import type { CaseStatus, CaseType } from '@/types'
@@ -33,15 +32,20 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
   const [pulse, setPulse] = useState(false)
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const load = useCallback(async () => {
+    const casesParams = new URLSearchParams({ select: 'id,status,case_type,created_at' })
+    const referralsParams = new URLSearchParams({ select: 'id,status', status: 'eq.sent' })
+    const logsParams = new URLSearchParams({ select: 'id,new_status,created_at,case_id', order: 'created_at.desc', limit: '10' })
+
     const [casesRes, referralsRes, logsRes] = await Promise.all([
-      supabase.from('cases').select('id, status, case_type, created_at'),
-      supabase.from('referrals').select('id, status').eq('status', 'sent'),
-      supabase.from('case_status_logs').select('id, new_status, created_at, case_id').order('created_at', { ascending: false }).limit(10),
+      dbGet<{ id: string; status: CaseStatus; case_type: CaseType; created_at: string }[]>('cases', casesParams),
+      dbGet<{ id: string; status: string }[]>('referrals', referralsParams),
+      dbGet<{ id: string; new_status: string; created_at: string; case_id: string }[]>('case_status_logs', logsParams),
     ])
 
-    const cases = (casesRes.data ?? []) as { id: string; status: CaseStatus; case_type: CaseType; created_at: string }[]
+    const cases = casesRes.data ?? []
     setStats({
       total: cases.length,
       open: cases.filter(c => c.status === 'open').length,
@@ -73,7 +77,7 @@ export default function DashboardPage() {
       value,
     })))
 
-    setRecentLogs((logsRes.data ?? []) as typeof recentLogs)
+    setRecentLogs(logsRes.data ?? [])
     setLoading(false)
     setLastUpdated(new Date())
   }, [])
@@ -81,26 +85,15 @@ export default function DashboardPage() {
   useEffect(() => {
     load()
 
-    const channel = supabase
-      .channel('dashboard-realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'cases' }, () => {
-        setPulse(true)
-        load()
-        setTimeout(() => setPulse(false), 1200)
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'referrals' }, () => {
-        setPulse(true)
-        load()
-        setTimeout(() => setPulse(false), 1200)
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'case_status_logs' }, () => {
-        setPulse(true)
-        load()
-        setTimeout(() => setPulse(false), 1200)
-      })
-      .subscribe()
+    intervalRef.current = setInterval(() => {
+      setPulse(true)
+      load()
+      setTimeout(() => setPulse(false), 1200)
+    }, 30_000)
 
-    return () => { supabase.removeChannel(channel) }
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current)
+    }
   }, [load])
 
   const statCards = [
@@ -131,7 +124,6 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Super Admin quick-access banner */}
         {profile?.role === 'super_admin' && (
           <div
             className="flex items-center justify-between bg-primary/5 border border-primary/20 rounded-lg px-4 py-3 cursor-pointer hover:bg-primary/10 transition-colors"
@@ -154,7 +146,6 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {/* Stat cards */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {statCards.map(({ label, value, icon: Icon, color, bg }) => (
             <Card key={label} data-testid={`stat-${label.toLowerCase().replace(/\s+/g, '-')}`}>
@@ -175,7 +166,6 @@ export default function DashboardPage() {
           ))}
         </div>
 
-        {/* Pending referrals alert */}
         {stats.pending_referrals > 0 && (
           <div className="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
             <ArrowLeftRight className="h-4 w-4 text-amber-600 flex-shrink-0" />
@@ -186,7 +176,6 @@ export default function DashboardPage() {
         )}
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Monthly trend */}
           <Card className="lg:col-span-2">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-semibold flex items-center gap-2">
@@ -206,7 +195,6 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
 
-          {/* Case by type */}
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-semibold">Cases by Type</CardTitle>
@@ -228,7 +216,6 @@ export default function DashboardPage() {
           </Card>
         </div>
 
-        {/* Recent activity */}
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-semibold">Recent Activity</CardTitle>

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { supabase } from '@/lib/supabase'
+import { dbGet } from '@/lib/api'
 import type { Office } from '@/types'
 
 export function useOffices() {
@@ -7,14 +7,11 @@ export function useOffices() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    supabase
-      .from('offices')
-      .select('*')
-      .order('name')
-      .then(({ data }) => {
-        setOffices((data ?? []) as Office[])
-        setLoading(false)
-      })
+    const params = new URLSearchParams({ select: '*', order: 'name.asc' })
+    dbGet<Office[]>('offices', params).then(({ data }) => {
+      setOffices(data ?? [])
+      setLoading(false)
+    })
   }, [])
 
   return { offices, loading }

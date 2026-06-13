@@ -1,39 +1,42 @@
-import { useState, useEffect } from 'react'
-import { supabase } from '@/lib/supabase'
+import { useState, useEffect, useRef } from 'react'
+import { dbGet, dbUpdate } from '@/lib/api'
 import type { Notification } from '@/types'
 
 export function useNotifications(userId?: string, officeId?: string) {
   const [notifications, setNotifications] = useState<Notification[]>([])
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   async function load() {
     if (!userId) return
-    const { data } = await supabase
-      .from('notifications')
-      .select('*')
-      .or(`recipient_user_id.eq.${userId}${officeId ? `,recipient_office_id.eq.${officeId}` : ''}`)
-      .order('created_at', { ascending: false })
-      .limit(10)
-    setNotifications((data ?? []) as Notification[])
+    const params = new URLSearchParams()
+    params.set('select', '*')
+    params.set('order', 'created_at.desc')
+    params.set('limit', '10')
+    const orParts = [`recipient_user_id.eq.${userId}`]
+    if (officeId) orParts.push(`recipient_office_id.eq.${officeId}`)
+    params.set('or', `(${orParts.join(',')})`)
+
+    const { data } = await dbGet<Notification[]>('notifications', params)
+    setNotifications(data ?? [])
   }
 
   useEffect(() => {
     load()
     if (!userId) return
-    const channel = supabase
-      .channel('notifications')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications' }, () => {
-        load()
-      })
-      .subscribe()
-    return () => { supabase.removeChannel(channel) }
+
+    intervalRef.current = setInterval(load, 30_000)
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current)
+    }
   }, [userId, officeId])
 
   async function markAllAsRead() {
     if (!userId) return
-    await supabase
-      .from('notifications')
-      .update({ is_read: true })
-      .or(`recipient_user_id.eq.${userId}${officeId ? `,recipient_office_id.eq.${officeId}` : ''}`)
+    const params = new URLSearchParams()
+    const orParts = [`recipient_user_id.eq.${userId}`]
+    if (officeId) orParts.push(`recipient_office_id.eq.${officeId}`)
+    params.set('or', `(${orParts.join(',')})`)
+    await dbUpdate('notifications', params, { is_read: true })
     load()
   }
 

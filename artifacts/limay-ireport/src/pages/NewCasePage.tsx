@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useLocation } from 'wouter'
-import { supabase } from '@/lib/supabase'
+import { dbInsert, storageUpload } from '@/lib/api'
 import { useAuth } from '@/contexts/AuthContext'
 import { useOffices } from '@/hooks/useOffices'
 import { Layout } from '@/components/layout/Layout'
@@ -17,14 +17,12 @@ import { LIMAY_BARANGAYS } from '@/types'
 const STEPS = ['Case Info', 'Victim / Biktima', 'Respondent', 'Narrative / Salaysay', 'Attachments', 'Review & Submit']
 
 interface FormData {
-  // Step 1
   case_type: string
   date_of_incident: string
   time_of_incident: string
   priority_level: string
   is_confidential: boolean
   assigned_to_office_id: string
-  // Step 2
   victim_last_name: string
   victim_first_name: string
   victim_middle_name: string
@@ -36,7 +34,6 @@ interface FormData {
   victim_contact_number: string
   victim_occupation: string
   victim_relationship_to_respondent: string
-  // Step 3
   respondent_unknown: boolean
   respondent_last_name: string
   respondent_first_name: string
@@ -46,9 +43,7 @@ interface FormData {
   respondent_address: string
   respondent_contact_number: string
   respondent_occupation: string
-  // Step 4
   narrative_text: string
-  // Step 5
   attachments: File[]
 }
 
@@ -104,7 +99,7 @@ export default function NewCasePage() {
   async function handleSubmit() {
     setSubmitting(true)
     try {
-      const { data: caseData, error: caseErr } = await supabase.from('cases').insert({
+      const { data: caseArr, error: caseErr } = await dbInsert<{ id: string }[]>('cases', {
         case_type: form.case_type,
         date_of_incident: form.date_of_incident || null,
         time_of_incident: form.time_of_incident || null,
@@ -114,12 +109,12 @@ export default function NewCasePage() {
         filed_by_office_id: profile?.office_id ?? null,
         created_by_user_id: profile?.id ?? null,
         status: 'open',
-      }).select().single()
+      })
 
-      if (caseErr || !caseData) throw new Error(caseErr?.message ?? 'Failed to create case')
-      const caseId = caseData.id
+      if (caseErr || !caseArr?.[0]) throw new Error(caseErr ?? 'Failed to create case')
+      const caseId = caseArr[0].id
 
-      await supabase.from('victims').insert({
+      await dbInsert('victims', {
         case_id: caseId,
         last_name: form.victim_last_name,
         first_name: form.victim_first_name,
@@ -137,7 +132,7 @@ export default function NewCasePage() {
       })
 
       if (!form.respondent_unknown) {
-        await supabase.from('respondents').insert({
+        await dbInsert('respondents', {
           case_id: caseId,
           last_name: form.respondent_last_name || null,
           first_name: form.respondent_first_name || null,
@@ -150,23 +145,22 @@ export default function NewCasePage() {
           is_known: true,
         })
       } else {
-        await supabase.from('respondents').insert({ case_id: caseId, is_known: false })
+        await dbInsert('respondents', { case_id: caseId, is_known: false })
       }
 
       if (form.narrative_text.trim()) {
-        await supabase.from('case_narratives').insert({
+        await dbInsert('case_narratives', {
           case_id: caseId,
           narrative_text: form.narrative_text,
           written_by_user_id: profile?.id ?? null,
         })
       }
 
-      // Upload attachments
       for (const file of form.attachments) {
         const path = `${caseId}/${Date.now()}_${file.name}`
-        const { data: uploadData } = await supabase.storage.from('case-attachments').upload(path, file)
+        const { data: uploadData } = await storageUpload('case-attachments', path, file)
         if (uploadData) {
-          await supabase.from('case_attachments').insert({
+          await dbInsert('case_attachments', {
             case_id: caseId,
             file_name: file.name,
             file_url: path,
@@ -177,19 +171,17 @@ export default function NewCasePage() {
         }
       }
 
-      // Notify assigned office
       if (form.assigned_to_office_id) {
-        await supabase.from('notifications').insert({
+        await dbInsert('notifications', {
           recipient_office_id: form.assigned_to_office_id,
           case_id: caseId,
-          message: `New case assigned to your office`,
+          message: 'New case assigned to your office',
           type: 'new_case',
         })
       }
 
       setLocation(`/cases/${caseId}`)
     } catch (err) {
-      console.error(err)
       setErrors({ submit: err instanceof Error ? err.message : 'Failed to submit case' })
     }
     setSubmitting(false)
@@ -211,7 +203,6 @@ export default function NewCasePage() {
           <p className="text-sm text-muted-foreground">Step {step + 1} of {STEPS.length}: {STEPS[step]}</p>
         </div>
 
-        {/* Progress */}
         <div className="flex gap-1">
           {STEPS.map((s, i) => (
             <div key={i} className={`h-1.5 flex-1 rounded-full transition-colors ${i <= step ? 'bg-primary' : 'bg-muted'}`} />
@@ -227,7 +218,6 @@ export default function NewCasePage() {
           </CardHeader>
           <CardContent className="space-y-4">
 
-            {/* Step 0: Case Info */}
             {step === 0 && (
               <>
                 <F label="Case Type / Uri ng Kaso" error={errors.case_type}>
@@ -278,7 +268,6 @@ export default function NewCasePage() {
               </>
             )}
 
-            {/* Step 1: Victim */}
             {step === 1 && (
               <>
                 <div className="grid grid-cols-3 gap-3">
@@ -346,7 +335,6 @@ export default function NewCasePage() {
               </>
             )}
 
-            {/* Step 2: Respondent */}
             {step === 2 && (
               <>
                 <div className="flex items-center gap-3 p-3 bg-muted/40 rounded-md">
@@ -386,7 +374,6 @@ export default function NewCasePage() {
               </>
             )}
 
-            {/* Step 3: Narrative */}
             {step === 3 && (
               <F label="Salaysay / Incident Narrative" error={errors.narrative_text}>
                 <Textarea
@@ -400,7 +387,6 @@ export default function NewCasePage() {
               </F>
             )}
 
-            {/* Step 4: Attachments */}
             {step === 4 && (
               <div className="space-y-3">
                 <Label>Attachments / Mga Kalakip</Label>
@@ -428,7 +414,6 @@ export default function NewCasePage() {
               </div>
             )}
 
-            {/* Step 5: Review */}
             {step === 5 && (
               <div className="space-y-4 text-sm">
                 <div className="grid grid-cols-2 gap-x-6 gap-y-2 bg-muted/30 rounded-lg p-4">
@@ -454,7 +439,6 @@ export default function NewCasePage() {
           </CardContent>
         </Card>
 
-        {/* Navigation */}
         <div className="flex justify-between">
           <Button variant="outline" onClick={prev} disabled={step === 0}>
             <ChevronLeft className="h-4 w-4 mr-1" /> Back

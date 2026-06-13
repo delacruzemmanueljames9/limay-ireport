@@ -1,13 +1,12 @@
 import { useState } from 'react'
 import { useParams, useLocation } from 'wouter'
-import { supabase } from '@/lib/supabase'
+import { storageSignedUrl } from '@/lib/api'
 import { useAuth } from '@/contexts/AuthContext'
 import { useCase, updateCaseStatus, createReferralForCase } from '@/hooks/useCases'
 import { useOffices } from '@/hooks/useOffices'
 import { Layout } from '@/components/layout/Layout'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -78,7 +77,7 @@ export default function CaseDetailPage() {
   }
 
   async function getDownloadUrl(path: string) {
-    const { data } = await supabase.storage.from('case-attachments').createSignedUrl(path, 60)
+    const { data } = await storageSignedUrl('case-attachments', path, 60)
     if (data?.signedUrl) window.open(data.signedUrl, '_blank')
   }
 
@@ -111,7 +110,6 @@ export default function CaseDetailPage() {
   return (
     <Layout>
       <div className="max-w-4xl mx-auto space-y-6">
-        {/* Print letterhead */}
         <div className="print-only hidden text-center border-b-2 border-gray-800 pb-4 mb-6">
           <p className="text-sm">Republic of the Philippines | Province of Bataan</p>
           <p className="text-xl font-bold">MUNICIPALITY OF LIMAY</p>
@@ -123,7 +121,6 @@ export default function CaseDetailPage() {
           </div>
         </div>
 
-        {/* Header */}
         <div className="flex items-start justify-between flex-wrap gap-3 no-print">
           <div className="flex items-center gap-3">
             <Button variant="ghost" size="sm" onClick={() => setLocation('/cases')} data-testid="button-back">
@@ -151,7 +148,6 @@ export default function CaseDetailPage() {
           </div>
         </div>
 
-        {/* Case Info */}
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-semibold flex items-center gap-2">
@@ -189,7 +185,6 @@ export default function CaseDetailPage() {
           </CardContent>
         </Card>
 
-        {/* Victim */}
         {victim && (
           <Card>
             <CardHeader className="pb-3">
@@ -212,7 +207,6 @@ export default function CaseDetailPage() {
           </Card>
         )}
 
-        {/* Respondent */}
         {respondent && (
           <Card>
             <CardHeader className="pb-3">
@@ -237,7 +231,6 @@ export default function CaseDetailPage() {
           </Card>
         )}
 
-        {/* Narrative */}
         {narratives.length > 0 && (
           <Card>
             <CardHeader className="pb-3">
@@ -254,7 +247,6 @@ export default function CaseDetailPage() {
           </Card>
         )}
 
-        {/* Attachments */}
         {attachments.length > 0 && (
           <Card>
             <CardHeader className="pb-3">
@@ -275,7 +267,6 @@ export default function CaseDetailPage() {
           </Card>
         )}
 
-        {/* Timeline */}
         {statusLogs.length > 0 && (
           <Card>
             <CardHeader className="pb-3">
@@ -303,7 +294,6 @@ export default function CaseDetailPage() {
           </Card>
         )}
 
-        {/* Status update dialog */}
         <Dialog open={statusDialog} onOpenChange={setStatusDialog}>
           <DialogContent>
             <DialogHeader><DialogTitle>Update Case Status / Baguhin ang Katayuan</DialogTitle></DialogHeader>
@@ -333,7 +323,6 @@ export default function CaseDetailPage() {
           </DialogContent>
         </Dialog>
 
-        {/* Referral dialog */}
         <Dialog open={referralDialog} onOpenChange={setReferralDialog}>
           <DialogContent>
             <DialogHeader><DialogTitle>Refer to Office / I-refer sa Opisina</DialogTitle></DialogHeader>

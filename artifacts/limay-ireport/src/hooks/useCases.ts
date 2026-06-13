@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { supabase } from '@/lib/supabase'
+import { dbGet, dbInsert, dbUpdate } from '@/lib/api'
 import type { Case, Victim, Respondent, CaseNarrative, CaseAttachment, CaseStatusLog } from '@/types'
 
 export interface CaseFilters {
@@ -10,6 +10,8 @@ export interface CaseFilters {
   page?: number
 }
 
+const JOINS = '*,filed_by_office:offices!cases_filed_by_office_id_fkey(*),assigned_to_office:offices!cases_assigned_to_office_id_fkey(*)'
+
 export function useCases(filters: CaseFilters = {}) {
   const [cases, setCases] = useState<Case[]>([])
   const [total, setTotal] = useState(0)
@@ -19,30 +21,27 @@ export function useCases(filters: CaseFilters = {}) {
   const page = filters.page ?? 1
 
   useEffect(() => {
-    async function fetch() {
+    async function load() {
       setLoading(true)
-      let query = supabase
-        .from('cases')
-        .select('*, filed_by_office:offices!cases_filed_by_office_id_fkey(*), assigned_to_office:offices!cases_assigned_to_office_id_fkey(*)', { count: 'exact' })
-        .order('created_at', { ascending: false })
+      const params = new URLSearchParams()
+      params.set('select', JOINS)
+      params.set('order', 'created_at.desc')
+      params.set('offset', String((page - 1) * pageSize))
+      params.set('limit', String(pageSize))
+      if (filters.case_type) params.set('case_type', `eq.${filters.case_type}`)
+      if (filters.status) params.set('status', `eq.${filters.status}`)
+      if (filters.priority_level) params.set('priority_level', `eq.${filters.priority_level}`)
 
-      if (filters.case_type) query = query.eq('case_type', filters.case_type)
-      if (filters.status) query = query.eq('status', filters.status)
-      if (filters.priority_level) query = query.eq('priority_level', filters.priority_level)
-
-      const from = (page - 1) * pageSize
-      query = query.range(from, from + pageSize - 1)
-
-      const { data, error: err, count } = await query
+      const { data, count, error: err } = await dbGet<Case[]>('cases', params, true)
       if (err) {
-        setError(err.message)
+        setError(err)
       } else {
-        setCases((data ?? []) as Case[])
+        setCases(data ?? [])
         setTotal(count ?? 0)
       }
       setLoading(false)
     }
-    fetch()
+    load()
   }, [filters.case_type, filters.status, filters.priority_level, page])
 
   return { cases, total, loading, error, pageSize }
@@ -60,37 +59,35 @@ export function useCase(id: string | null) {
   const loadCase = useCallback(async () => {
     if (!id) return
     setLoading(true)
+
+    const caseParams = new URLSearchParams({ select: JOINS, id: `eq.${id}` })
+    const victimsParams = new URLSearchParams({ select: '*', case_id: `eq.${id}` })
+    const respondentsParams = new URLSearchParams({ select: '*', case_id: `eq.${id}` })
+    const narrativesParams = new URLSearchParams({ select: '*', case_id: `eq.${id}`, order: 'created_at.asc' })
+    const attachmentsParams = new URLSearchParams({ select: '*', case_id: `eq.${id}`, order: 'created_at.asc' })
+    const logsParams = new URLSearchParams({ select: '*', case_id: `eq.${id}`, order: 'created_at.asc' })
+
     const [caseRes, victimsRes, respondentsRes, narrativesRes, attachmentsRes, logsRes] = await Promise.all([
-      supabase.from('cases').select('*, filed_by_office:offices!cases_filed_by_office_id_fkey(*), assigned_to_office:offices!cases_assigned_to_office_id_fkey(*)').eq('id', id).single(),
-      supabase.from('victims').select('*').eq('case_id', id),
-      supabase.from('respondents').select('*').eq('case_id', id),
-      supabase.from('case_narratives').select('*').eq('case_id', id).order('created_at'),
-      supabase.from('case_attachments').select('*').eq('case_id', id).order('created_at'),
-      supabase.from('case_status_logs').select('*').eq('case_id', id).order('created_at'),
+      dbGet<Case[]>('cases', caseParams),
+      dbGet<Victim[]>('victims', victimsParams),
+      dbGet<Respondent[]>('respondents', respondentsParams),
+      dbGet<CaseNarrative[]>('case_narratives', narrativesParams),
+      dbGet<CaseAttachment[]>('case_attachments', attachmentsParams),
+      dbGet<CaseStatusLog[]>('case_status_logs', logsParams),
     ])
-    if (caseRes.data) setCaseData(caseRes.data as Case)
-    setVictims((victimsRes.data ?? []) as Victim[])
-    setRespondents((respondentsRes.data ?? []) as Respondent[])
-    setNarratives((narrativesRes.data ?? []) as CaseNarrative[])
-    setAttachments((attachmentsRes.data ?? []) as CaseAttachment[])
-    setStatusLogs((logsRes.data ?? []) as CaseStatusLog[])
+
+    setCaseData((caseRes.data ?? [])[0] ?? null)
+    setVictims(victimsRes.data ?? [])
+    setRespondents(respondentsRes.data ?? [])
+    setNarratives(narrativesRes.data ?? [])
+    setAttachments(attachmentsRes.data ?? [])
+    setStatusLogs(logsRes.data ?? [])
     setLoading(false)
   }, [id])
 
   useEffect(() => {
     loadCase()
-
-    if (!id) return
-    const channel = supabase
-      .channel(`case-detail-realtime-${id}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'cases', filter: `id=eq.${id}` }, () => loadCase())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'case_status_logs', filter: `case_id=eq.${id}` }, () => loadCase())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'case_narratives', filter: `case_id=eq.${id}` }, () => loadCase())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'case_attachments', filter: `case_id=eq.${id}` }, () => loadCase())
-      .subscribe()
-
-    return () => { supabase.removeChannel(channel) }
-  }, [id, loadCase])
+  }, [loadCase])
 
   return { caseData, victims, respondents, narratives, attachments, statusLogs, loading, reload: loadCase }
 }
@@ -102,20 +99,21 @@ export async function updateCaseStatus(
   userId: string,
   notes?: string
 ) {
-  const { error: caseError } = await supabase
-    .from('cases')
-    .update({ status: newStatus, updated_at: new Date().toISOString() })
-    .eq('id', caseId)
-  if (caseError) return { error: caseError.message }
+  const { error: caseError } = await dbUpdate(
+    'cases',
+    new URLSearchParams({ id: `eq.${caseId}` }),
+    { status: newStatus, updated_at: new Date().toISOString() }
+  )
+  if (caseError) return { error: caseError }
 
-  const { error: logError } = await supabase.from('case_status_logs').insert({
+  const { error: logError } = await dbInsert('case_status_logs', {
     case_id: caseId,
     old_status: oldStatus,
     new_status: newStatus,
     changed_by_user_id: userId,
-    notes,
+    notes: notes ?? null,
   })
-  if (logError) return { error: logError.message }
+  if (logError) return { error: logError }
   return { error: null }
 }
 
@@ -126,28 +124,34 @@ export async function createReferralForCase(
   reason: string,
   userId: string
 ) {
-  const { data: referral, error } = await supabase.from('referrals').insert({
+  const { data: referralArr, error } = await dbInsert<{ id: string }[]>('referrals', {
     case_id: caseId,
     from_office_id: fromOfficeId,
     to_office_id: toOfficeId,
     referral_reason: reason,
-  }).select().single()
-  if (error) return { error: error.message }
+  })
+  if (error) return { error, referral: null }
+  const referral = referralArr?.[0] ?? null
 
-  await supabase.from('notifications').insert({
+  await dbInsert('notifications', {
     recipient_office_id: toOfficeId,
     case_id: caseId,
-    message: `New referral received for case`,
+    message: 'New referral received for case',
     type: 'referral_received',
   })
 
-  await supabase.from('cases').update({ status: 'referred', updated_at: new Date().toISOString() }).eq('id', caseId)
-  await supabase.from('case_status_logs').insert({
+  await dbUpdate(
+    'cases',
+    new URLSearchParams({ id: `eq.${caseId}` }),
+    { status: 'referred', updated_at: new Date().toISOString() }
+  )
+
+  await dbInsert('case_status_logs', {
     case_id: caseId,
     old_status: 'open',
     new_status: 'referred',
     changed_by_user_id: userId,
-    notes: `Referred to office`,
+    notes: 'Referred to office',
   })
 
   return { error: null, referral }
