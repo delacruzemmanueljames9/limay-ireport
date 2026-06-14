@@ -28,13 +28,13 @@ function getToken(): string {
   }
 }
 
-interface ProfileWithEmail extends Profile {
-  email?: string
+interface ProfileWithOffice extends Profile {
+  office?: { name: string } | null
 }
 
 function UserManagement() {
   const { offices } = useOffices()
-  const [users, setUsers] = useState<ProfileWithEmail[]>([])
+  const [users, setUsers] = useState<ProfileWithOffice[]>([])
   const [loading, setLoading] = useState(true)
   const [editDialogOpen, setEditDialogOpen] = useState(false)
   const [addDialogOpen, setAddDialogOpen] = useState(false)
@@ -49,8 +49,8 @@ function UserManagement() {
   const [passSuccess, setPassSuccess] = useState('')
 
   async function loadUsers() {
-    const params = new URLSearchParams({ select: '*,office:offices(*)', order: 'full_name.asc' })
-    const { data } = await dbGet<ProfileWithEmail[]>('profiles', params)
+    const params = new URLSearchParams({ select: '*,office:offices(name)', order: 'full_name.asc' })
+    const { data } = await dbGet<ProfileWithOffice[]>('profiles', params)
     setUsers(data ?? [])
     setLoading(false)
   }
@@ -164,7 +164,7 @@ function UserManagement() {
     setSaving(false)
   }
 
-  function openEdit(u: Profile) {
+  function openEdit(u: ProfileWithOffice) {
     setEditUser(u)
     setForm({ full_name: u.full_name, role: u.role, office_id: u.office_id ?? '', is_active: u.is_active })
     setEditDialogOpen(true)
@@ -212,9 +212,13 @@ function UserManagement() {
                       'bg-gray-100 text-gray-600 border-gray-200'
                     }`}>{u.role.replace('_', ' ')}</span>
                   </td>
-                  <td className="px-4 py-3 text-muted-foreground text-xs">{(u as any).office?.name ?? '—'}</td>
+                  <td className="px-4 py-3 text-muted-foreground text-xs">{u.office?.name ?? '—'}</td>
                   <td className="px-4 py-3">
-                    <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium border ${u.is_active ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : 'bg-red-100 text-red-700 border-red-200'}`}>
+                    <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium border ${
+                      u.is_active
+                        ? 'bg-emerald-100 text-emerald-700 border-emerald-200'
+                        : 'bg-red-100 text-red-700 border-red-200'
+                    }`}>
                       {u.is_active ? 'Active' : 'Inactive'}
                     </span>
                   </td>
@@ -288,7 +292,9 @@ function UserManagement() {
                 value={addForm.username}
                 onChange={e => setAddForm(f => ({ ...f, username: e.target.value }))}
               />
-              <p className="text-xs text-muted-foreground">Will become: {addForm.username || 'username'}@limay.gov.ph</p>
+              <p className="text-xs text-muted-foreground">
+                Will become: {addForm.username || 'username'}@limay.gov.ph
+              </p>
             </div>
             <div className="space-y-1.5">
               <Label>Password</Label>
@@ -412,9 +418,13 @@ function OfficeManagement() {
             <div key={o.id} className="flex items-center justify-between border border-border rounded-lg px-4 py-3">
               <div>
                 <p className="font-medium text-sm">{o.name}</p>
-                <p className="text-xs text-muted-foreground">{o.address ?? '—'} &bull; <span className="capitalize">{o.office_type}</span></p>
+                <p className="text-xs text-muted-foreground">
+                  {o.address ?? '—'} &bull; <span className="capitalize">{o.office_type}</span>
+                </p>
               </div>
-              <Button size="sm" variant="ghost" onClick={() => openEdit(o)}><Pencil className="h-3.5 w-3.5" /></Button>
+              <Button size="sm" variant="ghost" onClick={() => openEdit(o)}>
+                <Pencil className="h-3.5 w-3.5" />
+              </Button>
             </div>
           ))}
         </div>
@@ -487,14 +497,20 @@ function SystemLogs() {
         <tbody>
           {loading ? (
             Array.from({ length: 5 }).map((_, i) => (
-              <tr key={i}>{Array.from({ length: 4 }).map((_, j) => <td key={j} className="px-4 py-3"><Skeleton className="h-4 w-full" /></td>)}</tr>
+              <tr key={i}>
+                {Array.from({ length: 4 }).map((_, j) => (
+                  <td key={j} className="px-4 py-3"><Skeleton className="h-4 w-full" /></td>
+                ))}
+              </tr>
             ))
           ) : logs.length === 0 ? (
             <tr><td colSpan={4} className="px-4 py-8 text-center text-muted-foreground">No logs found</td></tr>
           ) : (
             logs.map(l => (
               <tr key={l.id} className="border-b border-border">
-                <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">{new Date(l.created_at).toLocaleString('en-PH')}</td>
+                <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">
+                  {new Date(l.created_at).toLocaleString('en-PH')}
+                </td>
                 <td className="px-4 py-3 font-mono text-xs">{l.case_id.slice(0, 8)}…</td>
                 <td className="px-4 py-3 text-xs capitalize">{l.old_status ?? '—'}</td>
                 <td className="px-4 py-3 text-xs capitalize font-medium">{l.new_status}</td>
