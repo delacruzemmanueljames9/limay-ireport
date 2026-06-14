@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { dbGet, dbInsert, dbUpdate, dbDelete } from '@/lib/api'
+import { dbGet, dbInsert, dbUpdate } from '@/lib/api'
 import { useOffices } from '@/hooks/useOffices'
 import { Layout } from '@/components/layout/Layout'
 import { Card, CardContent } from '@/components/ui/card'
@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Switch } from '@/components/ui/switch'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Plus, Pencil, Building2, Users, FileText, KeyRound, Trash2 } from 'lucide-react'
+import { Plus, Pencil, Building2, Users, FileText, KeyRound } from 'lucide-react'
 import type { Profile, Office } from '@/types'
 
 const SUPABASE_URL = 'https://inovdbudrzicbgkcnbpd.supabase.co'
@@ -28,33 +28,29 @@ function getToken(): string {
   }
 }
 
-interface ProfileWithOffice extends Profile {
-  office?: { name: string } | null
+interface ProfileWithEmail extends Profile {
+  email?: string
 }
 
 function UserManagement() {
   const { offices } = useOffices()
-  const [users, setUsers] = useState<ProfileWithOffice[]>([])
+  const [users, setUsers] = useState<ProfileWithEmail[]>([])
   const [loading, setLoading] = useState(true)
   const [editDialogOpen, setEditDialogOpen] = useState(false)
   const [addDialogOpen, setAddDialogOpen] = useState(false)
   const [passDialogOpen, setPassDialogOpen] = useState(false)
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
-  const [editUser, setEditUser] = useState<ProfileWithOffice | null>(null)
-  const [deleteUser, setDeleteUser] = useState<ProfileWithOffice | null>(null)
+  const [editUser, setEditUser] = useState<Profile | null>(null)
   const [form, setForm] = useState({ full_name: '', role: 'encoder', office_id: '', is_active: true })
   const [addForm, setAddForm] = useState({ username: '', password: '', full_name: '', role: 'encoder', office_id: '' })
   const [newPassword, setNewPassword] = useState('')
   const [saving, setSaving] = useState(false)
-  const [deleting, setDeleting] = useState(false)
   const [addError, setAddError] = useState('')
   const [passError, setPassError] = useState('')
   const [passSuccess, setPassSuccess] = useState('')
-  const [deleteError, setDeleteError] = useState('')
 
   async function loadUsers() {
-    const params = new URLSearchParams({ select: '*,office:offices(name)', order: 'full_name.asc' })
-    const { data } = await dbGet<ProfileWithOffice[]>('profiles', params)
+    const params = new URLSearchParams({ select: '*,office:offices(*)', order: 'full_name.asc' })
+    const { data } = await dbGet<ProfileWithEmail[]>('profiles', params)
     setUsers(data ?? [])
     setLoading(false)
   }
@@ -112,7 +108,7 @@ function UserManagement() {
       const data = await res.json()
 
       if (!res.ok || data.code) {
-        setAddError(data.message ?? data.hint ?? data.details ?? 'Failed to create user.')
+        setAddError(data.message ?? data.hint ?? 'Failed to create user.')
         setSaving(false)
         return
       }
@@ -157,7 +153,7 @@ function UserManagement() {
       const data = await res.json()
 
       if (!res.ok || data.code) {
-        setPassError(data.message ?? data.hint ?? 'Failed to change password.')
+        setPassError(data.message ?? 'Failed to change password.')
       } else {
         setPassSuccess('Password changed successfully!')
         setNewPassword('')
@@ -168,58 +164,18 @@ function UserManagement() {
     setSaving(false)
   }
 
-  async function handleDeleteUser() {
-    if (!deleteUser) return
-    setDeleting(true)
-    setDeleteError('')
-
-    try {
-      const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/delete_user`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'apikey': SUPABASE_ANON_KEY,
-          'Authorization': `Bearer ${getToken()}`,
-        },
-        body: JSON.stringify({ p_user_id: deleteUser.id }),
-      })
-
-      const data = await res.json()
-
-      if (!res.ok || data.code) {
-        setDeleteError(data.message ?? data.hint ?? 'Failed to delete user.')
-        setDeleting(false)
-        return
-      }
-
-      setDeleting(false)
-      setDeleteDialogOpen(false)
-      setDeleteUser(null)
-      loadUsers()
-    } catch {
-      setDeleteError('Connection error. Please try again.')
-      setDeleting(false)
-    }
-  }
-
-  function openEdit(u: ProfileWithOffice) {
+  function openEdit(u: Profile) {
     setEditUser(u)
     setForm({ full_name: u.full_name, role: u.role, office_id: u.office_id ?? '', is_active: u.is_active })
     setEditDialogOpen(true)
   }
 
-  function openChangePassword(u: ProfileWithOffice) {
+  function openChangePassword(u: Profile) {
     setEditUser(u)
     setNewPassword('')
     setPassError('')
     setPassSuccess('')
     setPassDialogOpen(true)
-  }
-
-  function openDelete(u: ProfileWithOffice) {
-    setDeleteUser(u)
-    setDeleteError('')
-    setDeleteDialogOpen(true)
   }
 
   return (
@@ -258,11 +214,7 @@ function UserManagement() {
                   </td>
                   <td className="px-4 py-3 text-muted-foreground text-xs">{u.office?.name ?? '—'}</td>
                   <td className="px-4 py-3">
-                    <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium border ${
-                      u.is_active
-                        ? 'bg-emerald-100 text-emerald-700 border-emerald-200'
-                        : 'bg-red-100 text-red-700 border-red-200'
-                    }`}>
+                    <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium border ${u.is_active ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : 'bg-red-100 text-red-700 border-red-200'}`}>
                       {u.is_active ? 'Active' : 'Inactive'}
                     </span>
                   </td>
@@ -273,9 +225,6 @@ function UserManagement() {
                       </Button>
                       <Button size="sm" variant="ghost" onClick={() => openChangePassword(u)}>
                         <KeyRound className="h-3.5 w-3.5 mr-1" /> Password
-                      </Button>
-                      <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive" onClick={() => openDelete(u)}>
-                        <Trash2 className="h-3.5 w-3.5 mr-1" /> Delete
                       </Button>
                     </div>
                   </td>
@@ -418,23 +367,6 @@ function UserManagement() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      {/* Delete User Dialog */}
-      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>Delete User</DialogTitle></DialogHeader>
-          <p className="text-sm text-muted-foreground">
-            Are you sure you want to delete <strong>{deleteUser?.full_name}</strong>? This action cannot be undone.
-          </p>
-          {deleteError && <p className="text-xs text-destructive">{deleteError}</p>}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>Cancel</Button>
-            <Button variant="destructive" onClick={handleDeleteUser} disabled={deleting}>
-              {deleting ? 'Deleting...' : 'Delete User'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   )
 }
@@ -484,9 +416,7 @@ function OfficeManagement() {
             <div key={o.id} className="flex items-center justify-between border border-border rounded-lg px-4 py-3">
               <div>
                 <p className="font-medium text-sm">{o.name}</p>
-                <p className="text-xs text-muted-foreground">
-                  {o.address ?? '—'} &bull; <span className="capitalize">{o.office_type}</span>
-                </p>
+                <p className="text-xs text-muted-foreground">{o.address ?? '—'} &bull; <span className="capitalize">{o.office_type}</span></p>
               </div>
               <Button size="sm" variant="ghost" onClick={() => openEdit(o)}>
                 <Pencil className="h-3.5 w-3.5" />
@@ -563,20 +493,14 @@ function SystemLogs() {
         <tbody>
           {loading ? (
             Array.from({ length: 5 }).map((_, i) => (
-              <tr key={i}>
-                {Array.from({ length: 4 }).map((_, j) => (
-                  <td key={j} className="px-4 py-3"><Skeleton className="h-4 w-full" /></td>
-                ))}
-              </tr>
+              <tr key={i}>{Array.from({ length: 4 }).map((_, j) => <td key={j} className="px-4 py-3"><Skeleton className="h-4 w-full" /></td>)}</tr>
             ))
           ) : logs.length === 0 ? (
             <tr><td colSpan={4} className="px-4 py-8 text-center text-muted-foreground">No logs found</td></tr>
           ) : (
             logs.map(l => (
               <tr key={l.id} className="border-b border-border">
-                <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">
-                  {new Date(l.created_at).toLocaleString('en-PH')}
-                </td>
+                <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">{new Date(l.created_at).toLocaleString('en-PH')}</td>
                 <td className="px-4 py-3 font-mono text-xs">{l.case_id.slice(0, 8)}…</td>
                 <td className="px-4 py-3 text-xs capitalize">{l.old_status ?? '—'}</td>
                 <td className="px-4 py-3 text-xs capitalize font-medium">{l.new_status}</td>
