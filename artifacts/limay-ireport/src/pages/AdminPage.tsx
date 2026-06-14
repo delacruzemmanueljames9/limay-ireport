@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { dbGet, dbInsert, dbUpdate } from '@/lib/api'
+import { dbGet, dbInsert, dbUpdate, dbDelete } from '@/lib/api'
 import { useOffices } from '@/hooks/useOffices'
 import { Layout } from '@/components/layout/Layout'
 import { Card, CardContent } from '@/components/ui/card'
@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Switch } from '@/components/ui/switch'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Plus, Pencil, Building2, Users, FileText, KeyRound } from 'lucide-react'
+import { Plus, Pencil, Building2, Users, FileText, KeyRound, Trash2 } from 'lucide-react'
 import type { Profile, Office } from '@/types'
 
 const SUPABASE_URL = 'https://inovdbudrzicbgkcnbpd.supabase.co'
@@ -39,11 +39,14 @@ function UserManagement() {
   const [editDialogOpen, setEditDialogOpen] = useState(false)
   const [addDialogOpen, setAddDialogOpen] = useState(false)
   const [passDialogOpen, setPassDialogOpen] = useState(false)
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [editUser, setEditUser] = useState<Profile | null>(null)
+  const [deleteUser, setDeleteUser] = useState<Profile | null>(null)
   const [form, setForm] = useState({ full_name: '', role: 'encoder', office_id: '', is_active: true })
   const [addForm, setAddForm] = useState({ username: '', password: '', full_name: '', role: 'encoder', office_id: '' })
   const [newPassword, setNewPassword] = useState('')
   const [saving, setSaving] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const [addError, setAddError] = useState('')
   const [passError, setPassError] = useState('')
   const [passSuccess, setPassSuccess] = useState('')
@@ -164,6 +167,30 @@ function UserManagement() {
     setSaving(false)
   }
 
+  async function handleDelete() {
+    if (!deleteUser) return
+    setDeleting(true)
+    try {
+      // Delete from auth via RPC
+      await fetch(`${SUPABASE_URL}/rest/v1/rpc/delete_user`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${getToken()}`,
+        },
+        body: JSON.stringify({ p_user_id: deleteUser.id }),
+      })
+      // Also delete profile
+      await dbDelete('profiles', new URLSearchParams({ id: `eq.${deleteUser.id}` }))
+    } catch {
+      // ignore
+    }
+    setDeleting(false)
+    setDeleteDialogOpen(false)
+    loadUsers()
+  }
+
   function openEdit(u: Profile) {
     setEditUser(u)
     setForm({ full_name: u.full_name, role: u.role, office_id: u.office_id ?? '', is_active: u.is_active })
@@ -176,6 +203,11 @@ function UserManagement() {
     setPassError('')
     setPassSuccess('')
     setPassDialogOpen(true)
+  }
+
+  function openDelete(u: Profile) {
+    setDeleteUser(u)
+    setDeleteDialogOpen(true)
   }
 
   return (
@@ -219,12 +251,15 @@ function UserManagement() {
                     </span>
                   </td>
                   <td className="px-4 py-3">
-                    <div className="flex gap-1">
+                    <div className="flex gap-1 flex-wrap">
                       <Button size="sm" variant="ghost" onClick={() => openEdit(u)}>
                         <Pencil className="h-3.5 w-3.5 mr-1" /> Edit
                       </Button>
                       <Button size="sm" variant="ghost" onClick={() => openChangePassword(u)}>
                         <KeyRound className="h-3.5 w-3.5 mr-1" /> Password
+                      </Button>
+                      <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive" onClick={() => openDelete(u)}>
+                        <Trash2 className="h-3.5 w-3.5 mr-1" /> Delete
                       </Button>
                     </div>
                   </td>
@@ -363,6 +398,22 @@ function UserManagement() {
             <Button variant="outline" onClick={() => setPassDialogOpen(false)}>Close</Button>
             <Button onClick={handleChangePassword} disabled={saving}>
               {saving ? 'Changing...' : 'Change Password'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete User Dialog */}
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Delete User</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Are you sure you want to delete <strong>{deleteUser?.full_name}</strong>? This cannot be undone.
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>Cancel</Button>
+            <Button variant="destructive" onClick={handleDelete} disabled={deleting}>
+              {deleting ? 'Deleting...' : 'Delete User'}
             </Button>
           </DialogFooter>
         </DialogContent>
