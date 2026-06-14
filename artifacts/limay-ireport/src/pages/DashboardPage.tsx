@@ -1,15 +1,15 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useLocation } from 'wouter'
-import { FolderOpen, Clock, CheckCircle, ArrowLeftRight, AlertTriangle, TrendingUp, Settings } from 'lucide-react'
+import { FolderOpen, Clock, CheckCircle, ArrowLeftRight, AlertTriangle, TrendingUp, Settings, MapPin } from 'lucide-react'
 import { dbGet } from '@/lib/api'
 import { useAuth } from '@/contexts/AuthContext'
 import { Layout } from '@/components/layout/Layout'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
-  PieChart, Pie, Cell,
+  PieChart, Pie, Cell, BarChart, Bar, LabelList,
 } from 'recharts'
-import { CASE_TYPE_LABELS, CASE_STATUS_LABELS } from '@/types'
+import { CASE_TYPE_LABELS, CASE_STATUS_LABELS, LIMAY_BARANGAYS } from '@/types'
 import type { CaseStatus, CaseType } from '@/types'
 
 const STATUS_COLORS: Record<string, string> = {
@@ -28,6 +28,7 @@ export default function DashboardPage() {
   const [stats, setStats] = useState({ total: 0, open: 0, ongoing: 0, resolved: 0, pending_referrals: 0 })
   const [monthlyData, setMonthlyData] = useState<{ month: string; cases: number }[]>([])
   const [typeData, setTypeData] = useState<{ name: string; value: number }[]>([])
+  const [barangayData, setBarangayData] = useState<{ barangay: string; cases: number }[]>([])
   const [recentLogs, setRecentLogs] = useState<{ id: string; new_status: string; created_at: string; case_id: string }[]>([])
   const [loading, setLoading] = useState(true)
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
@@ -36,11 +37,13 @@ export default function DashboardPage() {
 
   const load = useCallback(async () => {
     const casesParams = new URLSearchParams({ select: 'id,status,case_type,created_at' })
+    const victimsParams = new URLSearchParams({ select: 'case_id,address_barangay' })
     const referralsParams = new URLSearchParams({ select: 'id,status', status: 'eq.sent' })
     const logsParams = new URLSearchParams({ select: 'id,new_status,created_at,case_id', order: 'created_at.desc', limit: '10' })
 
-    const [casesRes, referralsRes, logsRes] = await Promise.all([
+    const [casesRes, victimsRes, referralsRes, logsRes] = await Promise.all([
       dbGet<{ id: string; status: CaseStatus; case_type: CaseType; created_at: string }[]>('cases', casesParams),
+      dbGet<{ case_id: string; address_barangay: string | null }[]>('victims', victimsParams),
       dbGet<{ id: string; status: string }[]>('referrals', referralsParams),
       dbGet<{ id: string; new_status: string; created_at: string; case_id: string }[]>('case_status_logs', logsParams),
     ])
@@ -77,6 +80,22 @@ export default function DashboardPage() {
       value,
     })))
 
+    // Barangay chart
+    const victims = victimsRes.data ?? []
+    const brgyMap: Record<string, number> = {}
+    LIMAY_BARANGAYS.forEach(b => { brgyMap[b] = 0 })
+    victims.forEach(v => {
+      if (v.address_barangay && v.address_barangay in brgyMap) {
+        brgyMap[v.address_barangay]++
+      }
+    })
+    setBarangayData(
+      Object.entries(brgyMap)
+        .map(([barangay, cases]) => ({ barangay, cases }))
+        .filter(b => b.cases > 0)
+        .sort((a, b) => b.cases - a.cases)
+    )
+
     setRecentLogs(logsRes.data ?? [])
     setLoading(false)
     setLastUpdated(new Date())
@@ -84,13 +103,11 @@ export default function DashboardPage() {
 
   useEffect(() => {
     load()
-
     intervalRef.current = setInterval(() => {
       setPulse(true)
       load()
       setTimeout(() => setPulse(false), 1200)
     }, 30_000)
-
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current)
     }
@@ -113,7 +130,7 @@ export default function DashboardPage() {
               {profile?.office?.name ?? 'All offices'} &mdash; Overview
             </p>
           </div>
-          <div className="flex items-center gap-1.5 text-xs text-emerald-600 font-medium" data-testid="live-indicator">
+          <div className="flex items-center gap-1.5 text-xs text-emerald-600 font-medium">
             <span className={`h-2 w-2 rounded-full bg-emerald-500 ${pulse ? 'animate-ping' : 'animate-pulse'}`} />
             LIVE
             {lastUpdated && (
@@ -128,7 +145,6 @@ export default function DashboardPage() {
           <div
             className="flex items-center justify-between bg-primary/5 border border-primary/20 rounded-lg px-4 py-3 cursor-pointer hover:bg-primary/10 transition-colors"
             onClick={() => setLocation('/admin')}
-            data-testid="admin-panel-banner"
             role="button"
           >
             <div className="flex items-center gap-3">
@@ -148,7 +164,7 @@ export default function DashboardPage() {
 
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {statCards.map(({ label, value, icon: Icon, color, bg }) => (
-            <Card key={label} data-testid={`stat-${label.toLowerCase().replace(/\s+/g, '-')}`}>
+            <Card key={label}>
               <CardContent className="p-5">
                 <div className="flex items-start justify-between">
                   <div>
@@ -216,6 +232,32 @@ export default function DashboardPage() {
           </Card>
         </div>
 
+        {/* Barangay Chart */}
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-semibold flex items-center gap-2">
+              <MapPin className="h-4 w-4" /> Cases by Barangay
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {barangayData.length === 0 ? (
+              <div className="h-[200px] flex items-center justify-center text-muted-foreground text-sm">No data yet</div>
+            ) : (
+              <ResponsiveContainer width="100%" height={Math.max(200, barangayData.length * 40)}>
+                <BarChart data={barangayData} layout="vertical" margin={{ left: 16, right: 32 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                  <XAxis type="number" tick={{ fontSize: 11 }} allowDecimals={false} />
+                  <YAxis type="category" dataKey="barangay" tick={{ fontSize: 11 }} width={140} />
+                  <Tooltip />
+                  <Bar dataKey="cases" fill="hsl(218,64%,28%)" radius={[0, 4, 4, 0]}>
+                    <LabelList dataKey="cases" position="right" style={{ fontSize: 11 }} />
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </CardContent>
+        </Card>
+
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-semibold">Recent Activity</CardTitle>
@@ -230,7 +272,6 @@ export default function DashboardPage() {
                     key={log.id}
                     className="flex items-center justify-between py-2 border-b border-border last:border-0 cursor-pointer hover:bg-muted/30 -mx-2 px-2 rounded"
                     onClick={() => setLocation(`/cases/${log.case_id}`)}
-                    data-testid={`activity-log-${log.id}`}
                   >
                     <div className="flex items-center gap-3">
                       <div className="h-2 w-2 rounded-full" style={{ backgroundColor: STATUS_COLORS[log.new_status] ?? '#6B7280' }} />
