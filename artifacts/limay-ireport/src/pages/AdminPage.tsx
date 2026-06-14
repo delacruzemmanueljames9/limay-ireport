@@ -11,8 +11,22 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Switch } from '@/components/ui/switch'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Plus, Pencil, Building2, Users, FileText } from 'lucide-react'
+import { Plus, Pencil, Building2, Users, FileText, KeyRound } from 'lucide-react'
 import type { Profile, Office } from '@/types'
+
+const SUPABASE_URL = 'https://inovdbudrzicbgkcnbpd.supabase.co'
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imlub3ZkYnVkcnppY2Jna2NuYnBkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEyNDY1NzEsImV4cCI6MjA5NjgyMjU3MX0.fBJ418qpVpnGusbFPV9_GriTF2OttI7-lCHdLUxZbZU'
+
+function getToken(): string {
+  try {
+    const raw = localStorage.getItem('sb-session')
+    if (!raw) return SUPABASE_ANON_KEY
+    const parsed = JSON.parse(raw) as { access_token?: string }
+    return parsed.access_token ?? SUPABASE_ANON_KEY
+  } catch {
+    return SUPABASE_ANON_KEY
+  }
+}
 
 interface ProfileWithEmail extends Profile {
   email?: string
@@ -22,10 +36,17 @@ function UserManagement() {
   const { offices } = useOffices()
   const [users, setUsers] = useState<ProfileWithEmail[]>([])
   const [loading, setLoading] = useState(true)
-  const [dialogOpen, setDialogOpen] = useState(false)
+  const [editDialogOpen, setEditDialogOpen] = useState(false)
+  const [addDialogOpen, setAddDialogOpen] = useState(false)
+  const [passDialogOpen, setPassDialogOpen] = useState(false)
   const [editUser, setEditUser] = useState<Profile | null>(null)
   const [form, setForm] = useState({ full_name: '', role: 'encoder', office_id: '', is_active: true })
+  const [addForm, setAddForm] = useState({ username: '', password: '', full_name: '', role: 'encoder', office_id: '' })
+  const [newPassword, setNewPassword] = useState('')
   const [saving, setSaving] = useState(false)
+  const [addError, setAddError] = useState('')
+  const [passError, setPassError] = useState('')
+  const [passSuccess, setPassSuccess] = useState('')
 
   async function loadUsers() {
     const params = new URLSearchParams({ select: '*,office:offices(*)', order: 'full_name.asc' })
@@ -50,20 +71,124 @@ function UserManagement() {
       }
     )
     setSaving(false)
-    setDialogOpen(false)
+    setEditDialogOpen(false)
     loadUsers()
+  }
+
+  async function handleAddUser() {
+    setAddError('')
+    if (!addForm.username || !addForm.password || !addForm.full_name) {
+      setAddError('Username, password, and full name are required.')
+      return
+    }
+    setSaving(true)
+    const email = addForm.username.includes('@') ? addForm.username : addForm.username + '@limay.gov.ph'
+
+    try {
+      const res = await fetch(`${SUPABASE_URL}/auth/v1/admin/users`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${getToken()}`,
+        },
+        body: JSON.stringify({
+          email,
+          password: addForm.password,
+          email_confirm: true,
+          user_metadata: { full_name: addForm.full_name },
+        }),
+      })
+
+      const data = await res.json()
+
+      if (!res.ok) {
+        setAddError(data.message ?? data.error_description ?? 'Failed to create user.')
+        setSaving(false)
+        return
+      }
+
+      // Update profile
+      await dbUpdate(
+        'profiles',
+        new URLSearchParams({ id: `eq.${data.id}` }),
+        {
+          full_name: addForm.full_name,
+          role: addForm.role,
+          office_id: addForm.office_id || null,
+          is_active: true,
+        }
+      )
+
+      setSaving(false)
+      setAddDialogOpen(false)
+      setAddForm({ username: '', password: '', full_name: '', role: 'encoder', office_id: '' })
+      loadUsers()
+    } catch {
+      setAddError('Connection error. Please try again.')
+      setSaving(false)
+    }
+  }
+
+  async function handleChangePassword() {
+    setPassError('')
+    setPassSuccess('')
+    if (!editUser || !newPassword) {
+      setPassError('Password is required.')
+      return
+    }
+    if (newPassword.length < 6) {
+      setPassError('Password must be at least 6 characters.')
+      return
+    }
+    setSaving(true)
+
+    try {
+      const res = await fetch(`${SUPABASE_URL}/auth/v1/admin/users/${editUser.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${getToken()}`,
+        },
+        body: JSON.stringify({ password: newPassword }),
+      })
+
+      const data = await res.json()
+
+      if (!res.ok) {
+        setPassError(data.message ?? 'Failed to change password.')
+      } else {
+        setPassSuccess('Password changed successfully!')
+        setNewPassword('')
+      }
+    } catch {
+      setPassError('Connection error. Please try again.')
+    }
+    setSaving(false)
   }
 
   function openEdit(u: Profile) {
     setEditUser(u)
     setForm({ full_name: u.full_name, role: u.role, office_id: u.office_id ?? '', is_active: u.is_active })
-    setDialogOpen(true)
+    setEditDialogOpen(true)
+  }
+
+  function openChangePassword(u: Profile) {
+    setEditUser(u)
+    setNewPassword('')
+    setPassError('')
+    setPassSuccess('')
+    setPassDialogOpen(true)
   }
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <p className="text-sm text-muted-foreground">{users.length} users registered</p>
+        <Button onClick={() => { setAddError(''); setAddDialogOpen(true) }}>
+          <Plus className="h-4 w-4 mr-1" /> Add User
+        </Button>
       </div>
 
       {loading ? (
@@ -82,7 +207,7 @@ function UserManagement() {
             </thead>
             <tbody>
               {users.map(u => (
-                <tr key={u.id} className="border-b border-border" data-testid={`row-user-${u.id}`}>
+                <tr key={u.id} className="border-b border-border">
                   <td className="px-4 py-3 font-medium">{u.full_name}</td>
                   <td className="px-4 py-3">
                     <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium border ${
@@ -97,9 +222,12 @@ function UserManagement() {
                       {u.is_active ? 'Active' : 'Inactive'}
                     </span>
                   </td>
-                  <td className="px-4 py-3">
-                    <Button size="sm" variant="ghost" onClick={() => openEdit(u)} data-testid={`button-edit-user-${u.id}`}>
+                  <td className="px-4 py-3 flex gap-1">
+                    <Button size="sm" variant="ghost" onClick={() => openEdit(u)}>
                       <Pencil className="h-3.5 w-3.5 mr-1" /> Edit
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => openChangePassword(u)}>
+                      <KeyRound className="h-3.5 w-3.5 mr-1" /> Password
                     </Button>
                   </td>
                 </tr>
@@ -109,13 +237,14 @@ function UserManagement() {
         </div>
       )}
 
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+      {/* Edit User Dialog */}
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
         <DialogContent>
           <DialogHeader><DialogTitle>Edit User</DialogTitle></DialogHeader>
           <div className="space-y-4">
             <div className="space-y-1.5">
               <Label>Full Name</Label>
-              <Input value={form.full_name} onChange={e => setForm(f => ({ ...f, full_name: e.target.value }))} data-testid="input-user-name" />
+              <Input value={form.full_name} onChange={e => setForm(f => ({ ...f, full_name: e.target.value }))} />
             </div>
             <div className="space-y-1.5">
               <Label>Role</Label>
@@ -143,9 +272,99 @@ function UserManagement() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
-            <Button onClick={handleSave} disabled={saving} data-testid="button-save-user">
+            <Button variant="outline" onClick={() => setEditDialogOpen(false)}>Cancel</Button>
+            <Button onClick={handleSave} disabled={saving}>
               {saving ? 'Saving...' : 'Save Changes'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add User Dialog */}
+      <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Add New User</DialogTitle></DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <Label>Username</Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  placeholder="e.g. juan.dela.cruz"
+                  value={addForm.username}
+                  onChange={e => setAddForm(f => ({ ...f, username: e.target.value }))}
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">Will become: {addForm.username || 'username'}@limay.gov.ph</p>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Password</Label>
+              <Input
+                type="password"
+                placeholder="Min. 6 characters"
+                value={addForm.password}
+                onChange={e => setAddForm(f => ({ ...f, password: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Full Name</Label>
+              <Input
+                placeholder="Juan Dela Cruz"
+                value={addForm.full_name}
+                onChange={e => setAddForm(f => ({ ...f, full_name: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Role</Label>
+              <Select value={addForm.role} onValueChange={v => setAddForm(f => ({ ...f, role: v }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="super_admin">Super Admin</SelectItem>
+                  <SelectItem value="encoder">Encoder</SelectItem>
+                  <SelectItem value="viewer">Viewer</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Office</Label>
+              <Select value={addForm.office_id} onValueChange={v => setAddForm(f => ({ ...f, office_id: v }))}>
+                <SelectTrigger><SelectValue placeholder="Select office" /></SelectTrigger>
+                <SelectContent>
+                  {offices.map(o => <SelectItem key={o.id} value={o.id}>{o.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            {addError && <p className="text-xs text-destructive">{addError}</p>}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAddDialogOpen(false)}>Cancel</Button>
+            <Button onClick={handleAddUser} disabled={saving}>
+              {saving ? 'Creating...' : 'Create User'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Change Password Dialog */}
+      <Dialog open={passDialogOpen} onOpenChange={setPassDialogOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Change Password — {editUser?.full_name}</DialogTitle></DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <Label>New Password</Label>
+              <Input
+                type="password"
+                placeholder="Min. 6 characters"
+                value={newPassword}
+                onChange={e => setNewPassword(e.target.value)}
+              />
+            </div>
+            {passError && <p className="text-xs text-destructive">{passError}</p>}
+            {passSuccess && <p className="text-xs text-emerald-600">{passSuccess}</p>}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPassDialogOpen(false)}>Close</Button>
+            <Button onClick={handleChangePassword} disabled={saving}>
+              {saving ? 'Changing...' : 'Change Password'}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -164,11 +383,7 @@ function OfficeManagement() {
   async function handleSave() {
     setSaving(true)
     if (editOffice) {
-      await dbUpdate(
-        'offices',
-        new URLSearchParams({ id: `eq.${editOffice.id}` }),
-        form as Record<string, unknown>
-      )
+      await dbUpdate('offices', new URLSearchParams({ id: `eq.${editOffice.id}` }), form as Record<string, unknown>)
     } else {
       await dbInsert('offices', form as Record<string, unknown>)
     }
@@ -191,7 +406,7 @@ function OfficeManagement() {
   return (
     <div className="space-y-4">
       <div className="flex justify-end">
-        <Button onClick={openAdd} data-testid="button-add-office">
+        <Button onClick={openAdd}>
           <Plus className="h-4 w-4 mr-1" /> Add Office
         </Button>
       </div>
@@ -200,7 +415,7 @@ function OfficeManagement() {
       ) : (
         <div className="grid gap-3">
           {offices.map(o => (
-            <div key={o.id} className="flex items-center justify-between border border-border rounded-lg px-4 py-3" data-testid={`office-${o.id}`}>
+            <div key={o.id} className="flex items-center justify-between border border-border rounded-lg px-4 py-3">
               <div>
                 <p className="font-medium text-sm">{o.name}</p>
                 <p className="text-xs text-muted-foreground">{o.address ?? '—'} &bull; <span className="capitalize">{o.office_type}</span></p>
@@ -217,7 +432,7 @@ function OfficeManagement() {
           <div className="space-y-4">
             <div className="space-y-1.5">
               <Label>Office Name</Label>
-              <Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} data-testid="input-office-name" />
+              <Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
             </div>
             <div className="space-y-1.5">
               <Label>Office Type</Label>
@@ -242,7 +457,7 @@ function OfficeManagement() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
-            <Button onClick={handleSave} disabled={saving} data-testid="button-save-office">
+            <Button onClick={handleSave} disabled={saving}>
               {saving ? 'Saving...' : 'Save'}
             </Button>
           </DialogFooter>
@@ -284,7 +499,7 @@ function SystemLogs() {
             <tr><td colSpan={4} className="px-4 py-8 text-center text-muted-foreground">No logs found</td></tr>
           ) : (
             logs.map(l => (
-              <tr key={l.id} className="border-b border-border" data-testid={`log-${l.id}`}>
+              <tr key={l.id} className="border-b border-border">
                 <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">{new Date(l.created_at).toLocaleString('en-PH')}</td>
                 <td className="px-4 py-3 font-mono text-xs">{l.case_id.slice(0, 8)}…</td>
                 <td className="px-4 py-3 text-xs capitalize">{l.old_status ?? '—'}</td>
@@ -309,13 +524,13 @@ export default function AdminPage() {
 
         <Tabs defaultValue="users">
           <TabsList>
-            <TabsTrigger value="users" data-testid="tab-users">
+            <TabsTrigger value="users">
               <Users className="h-4 w-4 mr-1.5" /> User Management
             </TabsTrigger>
-            <TabsTrigger value="offices" data-testid="tab-offices">
+            <TabsTrigger value="offices">
               <Building2 className="h-4 w-4 mr-1.5" /> Offices
             </TabsTrigger>
-            <TabsTrigger value="logs" data-testid="tab-logs">
+            <TabsTrigger value="logs">
               <FileText className="h-4 w-4 mr-1.5" /> System Logs
             </TabsTrigger>
           </TabsList>
