@@ -81,11 +81,15 @@ function UserManagement() {
       setAddError('Username, password, and full name are required.')
       return
     }
+    if (addForm.password.length < 6) {
+      setAddError('Password must be at least 6 characters.')
+      return
+    }
     setSaving(true)
     const email = addForm.username.includes('@') ? addForm.username : addForm.username + '@limay.gov.ph'
 
     try {
-      const res = await fetch(`${SUPABASE_URL}/auth/v1/admin/users`, {
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/create_user`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -93,32 +97,21 @@ function UserManagement() {
           'Authorization': `Bearer ${getToken()}`,
         },
         body: JSON.stringify({
-          email,
-          password: addForm.password,
-          email_confirm: true,
-          user_metadata: { full_name: addForm.full_name },
+          p_email: email,
+          p_password: addForm.password,
+          p_full_name: addForm.full_name,
+          p_role: addForm.role,
+          p_office_id: addForm.office_id || null,
         }),
       })
 
       const data = await res.json()
 
-      if (!res.ok) {
-        setAddError(data.message ?? data.error_description ?? 'Failed to create user.')
+      if (!res.ok || data.code) {
+        setAddError(data.message ?? data.hint ?? data.details ?? 'Failed to create user.')
         setSaving(false)
         return
       }
-
-      // Update profile
-      await dbUpdate(
-        'profiles',
-        new URLSearchParams({ id: `eq.${data.id}` }),
-        {
-          full_name: addForm.full_name,
-          role: addForm.role,
-          office_id: addForm.office_id || null,
-          is_active: true,
-        }
-      )
 
       setSaving(false)
       setAddDialogOpen(false)
@@ -144,20 +137,23 @@ function UserManagement() {
     setSaving(true)
 
     try {
-      const res = await fetch(`${SUPABASE_URL}/auth/v1/admin/users/${editUser.id}`, {
-        method: 'PUT',
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/change_user_password`, {
+        method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'apikey': SUPABASE_ANON_KEY,
           'Authorization': `Bearer ${getToken()}`,
         },
-        body: JSON.stringify({ password: newPassword }),
+        body: JSON.stringify({
+          p_user_id: editUser.id,
+          p_new_password: newPassword,
+        }),
       })
 
       const data = await res.json()
 
-      if (!res.ok) {
-        setPassError(data.message ?? 'Failed to change password.')
+      if (!res.ok || data.code) {
+        setPassError(data.message ?? data.hint ?? 'Failed to change password.')
       } else {
         setPassSuccess('Password changed successfully!')
         setNewPassword('')
@@ -216,7 +212,7 @@ function UserManagement() {
                       'bg-gray-100 text-gray-600 border-gray-200'
                     }`}>{u.role.replace('_', ' ')}</span>
                   </td>
-                  <td className="px-4 py-3 text-muted-foreground text-xs">{u.office?.name ?? '—'}</td>
+                  <td className="px-4 py-3 text-muted-foreground text-xs">{(u as any).office?.name ?? '—'}</td>
                   <td className="px-4 py-3">
                     <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium border ${u.is_active ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : 'bg-red-100 text-red-700 border-red-200'}`}>
                       {u.is_active ? 'Active' : 'Inactive'}
@@ -287,13 +283,11 @@ function UserManagement() {
           <div className="space-y-4">
             <div className="space-y-1.5">
               <Label>Username</Label>
-              <div className="flex items-center gap-2">
-                <Input
-                  placeholder="e.g. juan.dela.cruz"
-                  value={addForm.username}
-                  onChange={e => setAddForm(f => ({ ...f, username: e.target.value }))}
-                />
-              </div>
+              <Input
+                placeholder="e.g. juan.dela.cruz"
+                value={addForm.username}
+                onChange={e => setAddForm(f => ({ ...f, username: e.target.value }))}
+              />
               <p className="text-xs text-muted-foreground">Will become: {addForm.username || 'username'}@limay.gov.ph</p>
             </div>
             <div className="space-y-1.5">
