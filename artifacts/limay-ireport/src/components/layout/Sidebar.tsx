@@ -8,16 +8,13 @@ interface NavItem {
   href: string
   label: string
   icon: typeof LayoutDashboard
-  /** If set, only show to logged-in users with one of these roles */
-  roles?: ('super_admin' | 'encoder' | 'viewer')[]
-  /** If true, requires any authenticated user */
-  requiresAuth?: boolean
+  roles?: ('super_admin' | 'admin' | 'encoder' | 'viewer')[]
 }
 
 const navItems: NavItem[] = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/cases', label: 'Cases / Kaso', icon: FolderOpen },
-  { href: '/referrals', label: 'Referrals', icon: ArrowLeftRight, roles: ['super_admin', 'encoder'] },
+  { href: '/referrals', label: 'Referrals', icon: ArrowLeftRight, roles: ['super_admin', 'admin', 'encoder'] },
   { href: '/reports', label: 'Reports', icon: BarChart3 },
 ]
 
@@ -27,9 +24,9 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
   const role = profile?.role
 
   const visibleItems = navItems.filter(item => {
-    if (!item.roles) return true           // public item — always visible
-    if (!profile) return false             // role-restricted, not logged in
-    return item.roles.includes(role as 'super_admin' | 'encoder' | 'viewer')
+    if (!item.roles) return true
+    if (!profile) return false
+    return item.roles.includes(role as 'super_admin' | 'admin' | 'encoder' | 'viewer')
   })
 
   function isActive(href: string) {
@@ -39,7 +36,6 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
 
   return (
     <div className="flex flex-col h-full bg-sidebar text-sidebar-foreground">
-      {/* Header */}
       <div className="px-4 py-5 border-b border-sidebar-border">
         <div className="flex items-center gap-3">
           <div className="h-10 w-10 rounded-full bg-sidebar-primary flex items-center justify-center flex-shrink-0">
@@ -52,7 +48,6 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
         </div>
       </div>
 
-      {/* Office badge — logged-in users only */}
       {profile?.office && (
         <div className="mx-3 mt-3 px-3 py-2 bg-sidebar-accent rounded-md">
           <p className="text-xs text-sidebar-accent-foreground/70 uppercase tracking-wide">Office</p>
@@ -60,7 +55,6 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
         </div>
       )}
 
-      {/* Nav */}
       <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
         {visibleItems.map(({ href, label, icon: Icon }) => (
           <Link
@@ -80,7 +74,6 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
           </Link>
         ))}
 
-        {/* Admin Panel — super_admin ONLY */}
         {role === 'super_admin' && (
           <>
             <div className="my-2 border-t border-sidebar-border" />
@@ -102,13 +95,12 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
         )}
       </nav>
 
-      {/* Bottom: Login button OR user info */}
       <div className="px-3 py-3 border-t border-sidebar-border">
         {profile ? (
           <div className="px-1 space-y-0.5">
             <p className="text-xs text-sidebar-foreground/70 font-medium truncate">{profile.full_name}</p>
             <p className="text-xs text-sidebar-foreground/50">
-              {role === 'super_admin' ? '⭐ Super Admin' : role === 'encoder' ? '✏️ Encoder' : '👁 Viewer'}
+              {role === 'super_admin' ? '⭐ Super Admin' : role === 'admin' ? '🛠️ Admin' : role === 'encoder' ? '✏️ Encoder' : '👁 Viewer'}
             </p>
           </div>
         ) : (
