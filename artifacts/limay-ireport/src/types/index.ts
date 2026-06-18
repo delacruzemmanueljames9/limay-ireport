@@ -1,4 +1,4 @@
-export type UserRole = 'super_admin' | 'encoder' | 'viewer'
+export type UserRole = 'super_admin' | 'admin' | 'encoder' | 'viewer'
 export type OfficeType = 'barangay' | 'pnp' | 'mswd' | 'munisipyo'
 export type CaseType = 'vawc' | 'blotter' | 'referral' | 'incident'
 export type CaseStatus = 'open' | 'ongoing' | 'resolved' | 'referred' | 'closed'
@@ -22,6 +22,7 @@ export interface Profile {
   full_name: string
   role: UserRole
   office_id?: string
+  email?: string
   is_active: boolean
   created_at: string
   updated_at: string
