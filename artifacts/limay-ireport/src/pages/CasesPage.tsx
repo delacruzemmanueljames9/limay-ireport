@@ -45,6 +45,8 @@ export default function CasesPage() {
   const [pulse, setPulse] = useState(false)
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
+  const isEncoder = profile?.role === 'encoder' && !!profile.office_id
+
   const load = useCallback(async () => {
     setLoading(true)
 
@@ -56,6 +58,9 @@ export default function CasesPage() {
     if (filterType !== 'all') params.set('case_type', `eq.${filterType}`)
     if (filterStatus !== 'all') params.set('status', `eq.${filterStatus}`)
     if (filterPriority !== 'all') params.set('priority_level', `eq.${filterPriority}`)
+    if (isEncoder) {
+      params.set('or', `(filed_by_office_id.eq.${profile!.office_id},assigned_to_office_id.eq.${profile!.office_id})`)
+    }
 
     const { data, count, error } = await dbGet<Case[]>('cases', params, true)
     if (!error && data) {
@@ -77,7 +82,7 @@ export default function CasesPage() {
       setTotal(count ?? 0)
     }
     setLoading(false)
-  }, [filterType, filterStatus, filterPriority, page])
+  }, [filterType, filterStatus, filterPriority, page, isEncoder, profile?.office_id])
 
   useEffect(() => {
     load()
@@ -103,7 +108,10 @@ export default function CasesPage() {
           <div>
             <h1 className="text-2xl font-bold text-foreground">Cases / Kaso</h1>
             <div className="flex items-center gap-3">
-              <p className="text-sm text-muted-foreground">{total} case{total !== 1 ? 's' : ''} found</p>
+              <p className="text-sm text-muted-foreground">
+                {total} case{total !== 1 ? 's' : ''} found
+                {isEncoder && profile?.office?.name ? ` — ${profile.office.name}` : ''}
+              </p>
               <div className="flex items-center gap-1 text-xs text-emerald-600 font-medium" data-testid="cases-live-indicator">
                 <span className={`h-1.5 w-1.5 rounded-full bg-emerald-500 ${pulse ? 'animate-ping' : 'animate-pulse'}`} />
                 LIVE
