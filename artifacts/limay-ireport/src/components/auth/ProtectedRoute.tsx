@@ -7,7 +7,7 @@ import { useLocation } from 'wouter'
 
 interface ProtectedRouteProps {
   children: ReactNode
-  requiredRole?: 'super_admin' | 'encoder'
+  requiredRole?: 'super_admin' | 'admin' | 'encoder'
 }
 
 function ForbiddenPage() {
@@ -39,14 +39,12 @@ export function ProtectedRoute({ children, requiredRole }: ProtectedRouteProps) 
     )
   }
 
-  // Check localStorage directly as fallback
   if (!profile) {
     try {
       const raw = localStorage.getItem('sb-session')
       if (!raw) return <Redirect to="/login" />
       const session = JSON.parse(raw)
       if (!session?.user?.id) return <Redirect to="/login" />
-      // Session exists but profile not loaded yet — show spinner
       return (
         <div className="min-h-screen flex items-center justify-center bg-background">
           <div className="h-8 w-8 rounded-full border-4 border-primary border-t-transparent animate-spin" />
