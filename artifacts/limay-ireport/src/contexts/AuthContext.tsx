@@ -16,7 +16,7 @@ const AuthContext = createContext<AuthContextType | null>(null)
 async function getProfile(userId: string, accessToken: string): Promise<Profile | null> {
   try {
     const res = await fetch(
-      `${SUPABASE_URL}/rest/v1/profiles?id=eq.${userId}&select=id,full_name,role,office_id,is_active,created_at,updated_at&limit=1`,
+      `${SUPABASE_URL}/rest/v1/profiles?id=eq.${userId}&select=id,full_name,role,office_id,email,is_active,created_at,updated_at,office:offices(id,name,office_type,address,contact_number,created_at)&limit=1`,
       {
         headers: {
           'apikey': SUPABASE_ANON_KEY,
