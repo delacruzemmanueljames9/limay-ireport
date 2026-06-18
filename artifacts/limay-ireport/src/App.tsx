@@ -24,7 +24,9 @@ function Router() {
         <Redirect to="/dashboard" />
       </Route>
       <Route path="/dashboard">
-        <DashboardPage />
+        <ProtectedRoute>
+          <DashboardPage />
+        </ProtectedRoute>
       </Route>
       <Route path="/cases/new">
         <ProtectedRoute requiredRole="encoder">
@@ -32,10 +34,16 @@ function Router() {
         </ProtectedRoute>
       </Route>
       <Route path="/cases/:id">
-        {() => <CaseDetailPage />}
+        {() => (
+          <ProtectedRoute>
+            <CaseDetailPage />
+          </ProtectedRoute>
+        )}
       </Route>
       <Route path="/cases">
-        <CasesPage />
+        <ProtectedRoute>
+          <CasesPage />
+        </ProtectedRoute>
       </Route>
       <Route path="/referrals">
         <ProtectedRoute requiredRole="encoder">
@@ -43,10 +51,14 @@ function Router() {
         </ProtectedRoute>
       </Route>
       <Route path="/reports">
-        <ReportsPage />
+        <ProtectedRoute>
+          <ReportsPage />
+        </ProtectedRoute>
       </Route>
       <Route path="/admin">
-        <AdminPage />
+        <ProtectedRoute requiredRole="super_admin">
+          <AdminPage />
+        </ProtectedRoute>
       </Route>
       <Route component={NotFound} />
     </Switch>
